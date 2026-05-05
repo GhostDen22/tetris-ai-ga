@@ -8,6 +8,11 @@ class Board:
     def get_grid(self):
         return self.grid
 
+    def copy(self):
+        new_board = Board()
+        new_board.grid = [row[:] for row in self.grid]
+        return new_board
+
     def can_place(self, piece, piece_x, piece_y):
         for block_x, block_y in piece.get_blocks():
             x = piece_x + block_x
@@ -24,6 +29,17 @@ class Board:
 
         return True
 
+    def get_drop_y(self, piece, piece_x, start_y=0):
+        y = start_y
+
+        if not self.can_place(piece, piece_x, y):
+            return None
+
+        while self.can_place(piece, piece_x, y + 1):
+            y += 1
+
+        return y
+
     def place_piece(self, piece, piece_x, piece_y):
         for block_x, block_y in piece.get_blocks():
             x = piece_x + block_x
@@ -31,6 +47,19 @@ class Board:
 
             if 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT:
                 self.grid[y][x] = 1
+
+    def simulate_place(self, piece, piece_x, start_y=0):
+        simulated_board = self.copy()
+
+        drop_y = simulated_board.get_drop_y(piece, piece_x, start_y)
+
+        if drop_y is None:
+            return None, 0
+
+        simulated_board.place_piece(piece, piece_x, drop_y)
+        cleared = simulated_board.clear_lines()
+
+        return simulated_board, cleared
 
     def clear_lines(self):
         new_grid = []
