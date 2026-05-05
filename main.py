@@ -26,6 +26,7 @@ def main():
         print("Move:", bot.get_last_move())
         print("Move score:", bot.get_last_score())
         print("Features:", bot.get_features())
+        print("Reasons:", bot.get_last_reasons())
         print("Game score:", game.get_score())
         print("Lines:", game.get_lines())
         print("Game over:", game.is_game_over())

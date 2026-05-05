@@ -16,6 +16,7 @@ class Bot:
         self.last_features = {}
         self.last_move = None
         self.last_score = 0
+        self.last_reasons = []
 
     def evaluate_board(self, features):
         score = 0
@@ -25,6 +26,28 @@ class Bot:
             score += weight * value
 
         return score
+
+    def calculate_reasons(self, features):
+        contributions = []
+
+        for name, value in features.items():
+            weight = self.weights.get(name, 0)
+            contribution = weight * value
+
+            contributions.append({
+                "feature": name,
+                "value": value,
+                "weight": weight,
+                "contribution": contribution,
+                "abs_contribution": abs(contribution),
+            })
+
+        contributions.sort(
+            key=lambda item: item["abs_contribution"],
+            reverse=True
+        )
+
+        return contributions[:3]
 
     def find_best_move(self, board, piece):
         best_move = None
@@ -55,6 +78,7 @@ class Bot:
         self.last_move = best_move
         self.last_features = best_features or {}
         self.last_score = best_score if best_score is not None else 0
+        self.last_reasons = self.calculate_reasons(self.last_features)
 
         return best_move
 
@@ -66,3 +90,6 @@ class Bot:
 
     def get_last_score(self):
         return self.last_score
+
+    def get_last_reasons(self):
+        return self.last_reasons
