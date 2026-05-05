@@ -38,6 +38,47 @@ class Game:
         else:
             self.lock_piece()
 
+    def move_left(self):
+        if self.game_over:
+            return False
+
+        if self.board.can_place(self.current_piece, self.current_x - 1, self.current_y):
+            self.current_x -= 1
+            return True
+
+        return False
+
+    def move_right(self):
+        if self.game_over:
+            return False
+
+        if self.board.can_place(self.current_piece, self.current_x + 1, self.current_y):
+            self.current_x += 1
+            return True
+
+        return False
+
+    def rotate_current_piece(self):
+        if self.game_over:
+            return False
+
+        rotated_piece = self.current_piece.get_rotated()
+
+        if self.board.can_place(rotated_piece, self.current_x, self.current_y):
+            self.current_piece = rotated_piece
+            return True
+
+        return False
+
+    def hard_drop(self):
+        if self.game_over:
+            return
+
+        while self.board.can_place(self.current_piece, self.current_x, self.current_y + 1):
+            self.current_y += 1
+
+        self.lock_piece()
+
     def lock_piece(self):
         self.board.place_piece(self.current_piece, self.current_x, self.current_y)
 
