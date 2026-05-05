@@ -111,3 +111,18 @@ class Game:
 
     def is_game_over(self):
         return self.game_over
+
+    def get_current_piece(self):
+        return self.current_piece
+
+    def apply_bot_move(self, move):
+        if self.game_over or move is None:
+            return
+
+        self.current_piece = Piece(
+            self.current_piece.name,
+            move["rotation_index"]
+        )
+        self.current_x = move["x"]
+
+        self.hard_drop()

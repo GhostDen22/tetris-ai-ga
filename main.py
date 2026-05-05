@@ -11,19 +11,25 @@ def main():
     game = Game(seed=42)
     bot = Bot()
 
-    for step in range(25):
-        print(f"\nSTEP {step}")
-        board = game.get_board()
-        bot.update(board)
+    for turn in range(10):
+        if game.is_game_over():
+            break
 
-        print_board(board)
-        print("Score:", game.get_score())
-        print("Lines:", game.get_lines())
-        print("Seed:", game.get_seed())
-        print("Game over:", game.is_game_over())
+        move = bot.find_best_move(
+            game.board,
+            game.get_current_piece()
+        )
+
+        game.apply_bot_move(move)
+
+        print(f"\nTURN {turn}")
+        print("Move:", bot.get_last_move())
+        print("Move score:", bot.get_last_score())
         print("Features:", bot.get_features())
-
-        game.step()
+        print("Game score:", game.get_score())
+        print("Lines:", game.get_lines())
+        print("Game over:", game.is_game_over())
+        print_board(game.get_board())
 
 
 if __name__ == "__main__":
