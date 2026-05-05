@@ -1,19 +1,14 @@
-from ai.bot import Bot
-from ga.fitness import calculate_fitness
+from ga.population import create_initial_population
 
 
 def main():
-    result = calculate_fitness(
-        weights=Bot.DEFAULT_WEIGHTS,
-        max_moves=200
-    )
+    population = create_initial_population(size=5, seed=123)
 
-    print("FITNESS RESULT")
-    print("Fitness:", result["fitness"])
-    print("Average score:", result["average_score"])
-    print("Average lines:", result["average_lines"])
-    print("Average moves:", result["average_moves"])
-    print("Games tested:", len(result["games"]))
+    print("INITIAL POPULATION")
+
+    for index, genome in enumerate(population):
+        print(f"\nGenome {index}")
+        print(genome.get_weights())
 
 
 if __name__ == "__main__":
