@@ -1,36 +1,18 @@
-from core.game import Game
-from ai.bot import Bot
-
-
-def print_board(board):
-    for row in board:
-        print(row)
+from simulation.runner import run_bot_game
 
 
 def main():
-    game = Game(seed=42)
-    bot = Bot()
+    result = run_bot_game(seed=42, max_moves=100)
 
-    for turn in range(10):
-        if game.is_game_over():
-            break
-
-        move = bot.find_best_move(
-            game.board,
-            game.get_current_piece()
-        )
-
-        game.apply_bot_move(move)
-
-        print(f"\nTURN {turn}")
-        print("Move:", bot.get_last_move())
-        print("Move score:", bot.get_last_score())
-        print("Features:", bot.get_features())
-        print("Reasons:", bot.get_last_reasons())
-        print("Game score:", game.get_score())
-        print("Lines:", game.get_lines())
-        print("Game over:", game.is_game_over())
-        print_board(game.get_board())
+    print("BOT GAME RESULT")
+    print("Seed:", result["seed"])
+    print("Score:", result["score"])
+    print("Lines:", result["lines"])
+    print("Moves:", result["moves"])
+    print("Game over:", result["game_over"])
+    print("Last move:", result["last_move"])
+    print("Last features:", result["last_features"])
+    print("Last reasons:", result["last_reasons"])
 
 
 if __name__ == "__main__":
