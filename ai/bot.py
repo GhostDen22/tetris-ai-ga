@@ -9,6 +9,9 @@ class Bot:
         "max_height": -0.8,
         "bumpiness": -0.7,
         "lines_cleared": 3.0,
+        "well_sums": -0.4,
+        "row_transitions": -0.3,
+        "column_transitions": -0.3,
     }
 
     def __init__(self, weights=None):
