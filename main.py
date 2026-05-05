@@ -1,18 +1,19 @@
-from simulation.runner import run_bot_game
+from ai.bot import Bot
+from ga.fitness import calculate_fitness
 
 
 def main():
-    result = run_bot_game(seed=42, max_moves=100)
+    result = calculate_fitness(
+        weights=Bot.DEFAULT_WEIGHTS,
+        max_moves=200
+    )
 
-    print("BOT GAME RESULT")
-    print("Seed:", result["seed"])
-    print("Score:", result["score"])
-    print("Lines:", result["lines"])
-    print("Moves:", result["moves"])
-    print("Game over:", result["game_over"])
-    print("Last move:", result["last_move"])
-    print("Last features:", result["last_features"])
-    print("Last reasons:", result["last_reasons"])
+    print("FITNESS RESULT")
+    print("Fitness:", result["fitness"])
+    print("Average score:", result["average_score"])
+    print("Average lines:", result["average_lines"])
+    print("Average moves:", result["average_moves"])
+    print("Games tested:", len(result["games"]))
 
 
 if __name__ == "__main__":
