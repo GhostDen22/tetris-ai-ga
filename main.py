@@ -1,56 +1,28 @@
-import random
-
-from ga.population import (
-    create_initial_population,
-    evaluate_population,
-    get_best_genome,
-)
-
-from ga.operators import (
-    tournament_selection,
-    crossover,
-    mutate,
-)
+from ga.trainer import train_genetic_algorithm
 
 
 def main():
-    rng = random.Random(123)
-
-    population = create_initial_population(
-        size=10,
-        seed=123
+    result = train_genetic_algorithm(
+        population_size=30,
+        generations=20,
+        seed=123,
+        max_moves=100,
+        elitism_count=1,
+        tournament_size=3,
+        mutation_rate=0.2,
+        mutation_strength=1.0,
     )
 
-    evaluate_population(population, max_moves=100)
+    print("\nTRAINING FINISHED")
+    print("Best fitness:", result["best_fitness"])
+    print("Best weights:", result["best_weights"])
 
-    parent_a = tournament_selection(population, rng=rng)
-    parent_b = tournament_selection(population, rng=rng)
-
-    child = crossover(parent_a, parent_b, rng=rng)
-
-    mutated_child = mutate(
-        child,
-        mutation_rate=0.3,
-        mutation_strength=1.5,
-        rng=rng
-    )
-
-    print("\nPARENT A")
-    print(parent_a.get_weights())
-
-    print("\nPARENT B")
-    print(parent_b.get_weights())
-
-    print("\nCHILD")
-    print(child.get_weights())
-
-    print("\nMUTATED CHILD")
-    print(mutated_child.get_weights())
-
-    best = get_best_genome(population)
-
-    print("\nBEST GENOME")
-    print("Fitness:", best.get_fitness())
+    print("\nHistory:")
+    for item in result["history"]:
+        print(
+            f"Generation {item['generation']}: "
+            f"best_fitness={item['best_fitness']}"
+        )
 
 
 if __name__ == "__main__":
