@@ -2,7 +2,7 @@ from core.game import Game
 from ai.bot import Bot
 
 
-def run_bot_game(seed=42, weights=None, max_moves=500):
+def run_bot_game(seed=42, weights=None, max_moves=500, audit_logger=None):
     game = Game(seed=seed)
     bot = Bot(weights=weights)
 
@@ -17,10 +17,18 @@ def run_bot_game(seed=42, weights=None, max_moves=500):
         if move is None:
             break
 
+        if audit_logger is not None:
+            audit_logger.log_decision(
+                move=bot.get_last_move(),
+                score=bot.get_last_score(),
+                features=bot.get_features(),
+                reasons=bot.get_last_reasons(),
+            )
+
         game.apply_bot_move(move)
         moves_played += 1
 
-    return {
+    result = {
         "seed": seed,
         "score": game.get_score(),
         "lines": game.get_lines(),
@@ -31,3 +39,8 @@ def run_bot_game(seed=42, weights=None, max_moves=500):
         "last_score": bot.get_last_score(),
         "last_reasons": bot.get_last_reasons(),
     }
+
+    if audit_logger is not None:
+        audit_logger.log_game_result(result)
+
+    return result
