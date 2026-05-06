@@ -1,12 +1,22 @@
 from ga.trainer import train_genetic_algorithm
 from audit.logger import AuditLogger
 from ga.storage import save_genome
+from ga.evaluation import evaluate_weights_on_seed_sets
+
+
+def print_result(name, result):
+    print(f"\n{name.upper()}")
+    print("Fitness:", result["fitness"])
+    print("Average score:", result["average_score"])
+    print("Average lines:", result["average_lines"])
+    print("Average moves:", result["average_moves"])
+    print("Games:", len(result["games"]))
 
 
 def main():
     logger = AuditLogger()
 
-    result = train_genetic_algorithm(
+    training_result = train_genetic_algorithm(
         population_size=10,
         generations=5,
         seed=123,
@@ -19,13 +29,21 @@ def main():
     )
 
     save_genome(
-        weights=result["best_weights"],
-        fitness=result["best_fitness"],
+        weights=training_result["best_weights"],
+        fitness=training_result["best_fitness"],
+    )
+
+    evaluation = evaluate_weights_on_seed_sets(
+        weights=training_result["best_weights"],
+        max_moves=100,
     )
 
     print("\nTRAINING FINISHED")
-    print("Best fitness:", result["best_fitness"])
-    print("Audit saved to audit/audit_log.jsonl")
+    print("Best fitness:", training_result["best_fitness"])
+
+    print_result("train", evaluation["train"])
+    print_result("validation", evaluation["validation"])
+    print_result("test", evaluation["test"])
 
 
 if __name__ == "__main__":
