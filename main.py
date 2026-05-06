@@ -18,13 +18,22 @@ def print_evaluation_result(name, result):
 
 
 def run_demo():
+    try:
+        genome = load_genome()
+        weights = genome["weights"]
+        print("Using trained genome from models/best_genome.json")
+        print("Genome fitness:", genome["fitness"])
+    except FileNotFoundError:
+        weights = Bot.DEFAULT_WEIGHTS
+        print("No trained genome found. Using default heuristic weights.")
+
     result = run_bot_game(
         seed=42,
-        weights=Bot.DEFAULT_WEIGHTS,
-        max_moves=100
+        weights=weights,
+        max_moves=500
     )
 
-    print("DEMO RESULT")
+    print("\nDEMO RESULT")
     print("Score:", result["score"])
     print("Lines:", result["lines"])
     print("Moves:", result["moves"])
