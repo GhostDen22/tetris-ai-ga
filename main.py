@@ -54,10 +54,13 @@ def run_demo(max_moves=DEFAULT_DEMO_MOVES):
         weights = Bot.DEFAULT_WEIGHTS
         print("No trained genome found. Using default heuristic weights.")
 
+    logger = AuditLogger()
+
     result = run_bot_game(
         seed=42,
         weights=weights,
-        max_moves=max_moves
+        max_moves=max_moves,
+        audit_logger=logger
     )
 
     print("\nDEMO RESULT")
@@ -69,6 +72,7 @@ def run_demo(max_moves=DEFAULT_DEMO_MOVES):
     print("Last move:", result["last_move"])
     print("Last features:", result["last_features"])
     print("Last reasons:", result["last_reasons"])
+    print("Audit saved to audit/audit_log.jsonl")
 
 
 def run_training(max_moves=DEFAULT_TRAIN_MOVES):
