@@ -1,31 +1,19 @@
-from ga.trainer import train_genetic_algorithm
-from ga.storage import save_genome, load_genome
+from simulation.runner import run_bot_game
+from audit.logger import AuditLogger
 
 
 def main():
-    result = train_genetic_algorithm(
-        population_size=10,
-        generations=5,
-        seed=123,
+    logger = AuditLogger()
+
+    result = run_bot_game(
+        seed=42,
         max_moves=100,
-        elitism_count=1,
-        tournament_size=3,
-        mutation_rate=0.2,
-        mutation_strength=1.0,
     )
 
-    print("\nTRAINING FINISHED")
-    print("Best fitness:", result["best_fitness"])
+    logger.log_game_result(result)
 
-    save_genome(
-        weights=result["best_weights"],
-        fitness=result["best_fitness"],
-    )
-
-    loaded = load_genome()
-
-    print("\nLOADED GENOME")
-    print(loaded)
+    print("Audit test finished")
+    print("Result saved to audit/audit_log.jsonl")
 
 
 if __name__ == "__main__":
