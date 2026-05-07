@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pygame
 
 
@@ -46,6 +48,41 @@ class InfoPanel:
         self.font_small = pygame.font.SysFont("arial", 14, bold=True)
         self.font_tiny = pygame.font.SysFont("arial", 12)
         self.font_button = pygame.font.SysFont("arial", 14, bold=True)
+        self.font_logo_fallback = pygame.font.SysFont("arial", 18, bold=True)
+
+        self.logo_surface = self.load_logo()
+
+    def recolor_surface_to_white(self, surface):
+        recolored = surface.copy()
+        width, height = recolored.get_size()
+
+        for px in range(width):
+            for py in range(height):
+                color = recolored.get_at((px, py))
+                if color.a > 0:
+                    recolored.set_at((px, py), pygame.Color(245, 248, 252, color.a))
+
+        return recolored
+
+    def load_logo(self):
+        possible_paths = [
+            Path("assets/UWB_logo.png"),
+            Path("assets/UWB_logo.svg"),
+        ]
+
+        for path in possible_paths:
+            if not path.exists():
+                continue
+
+            try:
+                logo = pygame.image.load(str(path)).convert_alpha()
+                logo = pygame.transform.smoothscale(logo, (112, 42))
+                logo = self.recolor_surface_to_white(logo)
+                return logo
+            except pygame.error:
+                continue
+
+        return None
 
     def draw_text(self, surface, text, x, y, font, color):
         rendered = font.render(str(text), True, color)
@@ -85,6 +122,32 @@ class InfoPanel:
         )
 
         return x + 16, y + 48
+
+    def draw_logo(self, surface):
+        logo_width = 128
+        logo_height = 52
+        logo_x = self.rect.right - logo_width - 24
+        logo_y = self.rect.y + 14
+
+        logo_rect = pygame.Rect(logo_x, logo_y, logo_width, logo_height)
+
+        pygame.draw.rect(surface, self.card_color, logo_rect, border_radius=12)
+        pygame.draw.rect(surface, self.card_border_color, logo_rect, 1, border_radius=12)
+
+        if self.logo_surface is not None:
+            logo_image_x = logo_x + (logo_width - self.logo_surface.get_width()) // 2
+            logo_image_y = logo_y + (logo_height - self.logo_surface.get_height()) // 2
+            surface.blit(self.logo_surface, (logo_image_x, logo_image_y))
+        else:
+            fallback_text = "UwB"
+            fallback_surface = self.font_logo_fallback.render(
+                fallback_text,
+                True,
+                self.title_color,
+            )
+            text_x = logo_x + (logo_width - fallback_surface.get_width()) // 2
+            text_y = logo_y + (logo_height - fallback_surface.get_height()) // 2
+            surface.blit(fallback_surface, (text_x, text_y))
 
     def draw_divider(self, surface, x, y, width):
         pygame.draw.line(
@@ -696,6 +759,7 @@ class InfoPanel:
             self.font_title,
             self.title_color,
         )
+
         self.draw_text(
             surface,
             "Autonomous Tetris bot dashboard",
@@ -704,6 +768,8 @@ class InfoPanel:
             self.font_subtitle,
             self.muted_color,
         )
+
+        self.draw_logo(surface)
 
         panel_padding = 20
         column_gap = 14
@@ -766,9 +832,9 @@ class InfoPanel:
                 surface=surface,
                 bot=bot,
                 x=middle_x,
-                y=content_y + 198,
+                y=content_y + 196,
                 width=column_width,
-                height=240,
+                height=242,
             )
 
             self.draw_reasons(
@@ -777,7 +843,7 @@ class InfoPanel:
                 x=right_x,
                 y=content_y,
                 width=column_width,
-                height=296,
+                height=300,
             )
 
             self.draw_recent_logs(
