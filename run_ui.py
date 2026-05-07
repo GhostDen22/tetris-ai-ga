@@ -1,6 +1,7 @@
 import pygame
 
 from ai.bot import Bot
+from audit.logger import AuditLogger
 from core.game import Game
 from ga.storage import load_genome
 from ui.panels import InfoPanel
@@ -53,6 +54,70 @@ def get_current_piece_name(game):
     return getattr(current_piece, "name", str(current_piece))
 
 
+def log_ui_event(logger, event_name, data=None):
+    if data is None:
+        data = {}
+
+    logger.log_event(
+        "ui_event",
+        {
+            "name": event_name,
+            **data,
+        },
+    )
+
+
+def log_ui_decision(logger, bot, move, moves_played, seed, speed, mode):
+    logger.log_decision(
+        move=move,
+        score=bot.get_last_score(),
+        features=bot.get_features(),
+        reasons=bot.get_last_reasons(),
+    )
+
+    logger.log_event(
+        "ui_decision_context",
+        {
+            "moves_played": moves_played,
+            "seed": seed,
+            "speed": speed,
+            "mode": mode,
+        },
+    )
+
+
+def log_ui_game_result(logger, game, bot, moves_played, max_moves, seed, finish_reason):
+    result = {
+        "source": "ui",
+        "seed": seed,
+        "score": game.get_score(),
+        "lines": game.get_lines(),
+        "moves": moves_played,
+        "max_moves": max_moves,
+        "game_over": game.is_game_over(),
+        "finish_reason": finish_reason,
+        "last_features": bot.get_features(),
+        "last_move": bot.get_last_move(),
+        "last_score": bot.get_last_score(),
+        "last_reasons": bot.get_last_reasons(),
+    }
+
+    logger.log_game_result(result)
+
+
+def get_finish_reason(game, moves_played, max_moves, no_available_move):
+    if game.is_game_over():
+        return "game_over"
+
+    if no_available_move:
+        return "no_available_move"
+
+    if moves_played >= max_moves:
+        return "max_moves"
+
+    return "running"
+
+
 def main():
     pygame.init()
 
@@ -60,6 +125,8 @@ def main():
     pygame.display.set_caption("TetrisGA Demo")
 
     clock = pygame.time.Clock()
+
+    audit_logger = AuditLogger()
 
     weights, weights_label = load_bot_weights()
 
@@ -81,9 +148,22 @@ def main():
     moves_played = 0
     no_available_move = False
     last_placed_piece = "N/A"
+    final_result_logged = False
 
     last_bot_step_time = pygame.time.get_ticks()
     clickable_rects = {}
+
+    log_ui_event(
+        audit_logger,
+        "ui_demo_started",
+        {
+            "seed": selected_seed,
+            "mode": selected_mode,
+            "speed": selected_speed,
+            "weights": weights_label,
+            "max_moves": MAX_MOVES,
+        },
+    )
 
     running = True
 
@@ -92,6 +172,17 @@ def main():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                log_ui_event(
+                    audit_logger,
+                    "ui_window_closed",
+                    {
+                        "seed": selected_seed,
+                        "mode": selected_mode,
+                        "moves_played": moves_played,
+                        "score": game.get_score(),
+                        "lines": game.get_lines(),
+                    },
+                )
                 running = False
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -104,6 +195,14 @@ def main():
                 ):
                     seed_input_active = True
 
+                    log_ui_event(
+                        audit_logger,
+                        "seed_input_focused",
+                        {
+                            "current_seed_text": seed_text,
+                        },
+                    )
+
                 elif (
                     clickable_rects.get("toggle_play")
                     and clickable_rects["toggle_play"].collidepoint(mouse_position)
@@ -111,17 +210,43 @@ def main():
                     if selected_mode == "demo":
                         is_playing = not is_playing
 
+                        log_ui_event(
+                            audit_logger,
+                            "playback_toggled",
+                            {
+                                "is_playing": is_playing,
+                                "moves_played": moves_played,
+                                "score": game.get_score(),
+                                "lines": game.get_lines(),
+                            },
+                        )
+
                 elif (
                     clickable_rects.get("reset")
                     and clickable_rects["reset"].collidepoint(mouse_position)
                 ):
                     selected_seed = parse_seed(seed_text)
                     game, bot = create_game_and_bot(selected_seed, weights)
+
                     moves_played = 0
                     no_available_move = False
                     last_placed_piece = "N/A"
+                    final_result_logged = False
+
                     is_playing = True
                     last_bot_step_time = pygame.time.get_ticks()
+
+                    log_ui_event(
+                        audit_logger,
+                        "demo_reset",
+                        {
+                            "seed": selected_seed,
+                            "mode": selected_mode,
+                            "speed": selected_speed,
+                            "weights": weights_label,
+                            "max_moves": MAX_MOVES,
+                        },
+                    )
 
                 elif (
                     clickable_rects.get("mode_demo")
@@ -131,12 +256,28 @@ def main():
                     is_playing = True
                     last_bot_step_time = pygame.time.get_ticks()
 
+                    log_ui_event(
+                        audit_logger,
+                        "mode_changed",
+                        {
+                            "mode": selected_mode,
+                        },
+                    )
+
                 elif (
                     clickable_rects.get("mode_train")
                     and clickable_rects["mode_train"].collidepoint(mouse_position)
                 ):
                     selected_mode = "train"
                     is_playing = False
+
+                    log_ui_event(
+                        audit_logger,
+                        "mode_changed",
+                        {
+                            "mode": selected_mode,
+                        },
+                    )
 
                 elif (
                     clickable_rects.get("speed_slow")
@@ -145,12 +286,30 @@ def main():
                     selected_speed = "slow"
                     bot_move_delay_ms = SPEED_OPTIONS[selected_speed]
 
+                    log_ui_event(
+                        audit_logger,
+                        "speed_changed",
+                        {
+                            "speed": selected_speed,
+                            "delay_ms": bot_move_delay_ms,
+                        },
+                    )
+
                 elif (
                     clickable_rects.get("speed_normal")
                     and clickable_rects["speed_normal"].collidepoint(mouse_position)
                 ):
                     selected_speed = "normal"
                     bot_move_delay_ms = SPEED_OPTIONS[selected_speed]
+
+                    log_ui_event(
+                        audit_logger,
+                        "speed_changed",
+                        {
+                            "speed": selected_speed,
+                            "delay_ms": bot_move_delay_ms,
+                        },
+                    )
 
                 elif (
                     clickable_rects.get("speed_fast")
@@ -159,6 +318,15 @@ def main():
                     selected_speed = "fast"
                     bot_move_delay_ms = SPEED_OPTIONS[selected_speed]
 
+                    log_ui_event(
+                        audit_logger,
+                        "speed_changed",
+                        {
+                            "speed": selected_speed,
+                            "delay_ms": bot_move_delay_ms,
+                        },
+                    )
+
             if event.type == pygame.KEYDOWN and seed_input_active:
                 if event.key == pygame.K_BACKSPACE:
                     seed_text = seed_text[:-1]
@@ -166,12 +334,27 @@ def main():
                 elif event.key == pygame.K_RETURN:
                     selected_seed = parse_seed(seed_text)
                     game, bot = create_game_and_bot(selected_seed, weights)
+
                     moves_played = 0
                     no_available_move = False
                     last_placed_piece = "N/A"
+                    final_result_logged = False
+
                     is_playing = True
                     seed_input_active = False
                     last_bot_step_time = pygame.time.get_ticks()
+
+                    log_ui_event(
+                        audit_logger,
+                        "seed_applied",
+                        {
+                            "seed": selected_seed,
+                            "mode": selected_mode,
+                            "speed": selected_speed,
+                            "weights": weights_label,
+                            "max_moves": MAX_MOVES,
+                        },
+                    )
 
                 elif event.unicode.isdigit() and len(seed_text) < 9:
                     seed_text += event.unicode
@@ -199,7 +382,28 @@ def main():
 
             if move is None:
                 no_available_move = True
+
+                log_ui_event(
+                    audit_logger,
+                    "no_available_move",
+                    {
+                        "moves_played": moves_played,
+                        "seed": selected_seed,
+                        "score": game.get_score(),
+                        "lines": game.get_lines(),
+                    },
+                )
             else:
+                log_ui_decision(
+                    logger=audit_logger,
+                    bot=bot,
+                    move=bot.get_last_move(),
+                    moves_played=moves_played + 1,
+                    seed=selected_seed,
+                    speed=selected_speed,
+                    mode=selected_mode,
+                )
+
                 last_placed_piece = current_piece_name
                 game.apply_bot_move(move)
                 moves_played += 1
@@ -211,6 +415,26 @@ def main():
             or moves_played >= MAX_MOVES
             or no_available_move
         )
+
+        if demo_finished and not final_result_logged:
+            finish_reason = get_finish_reason(
+                game=game,
+                moves_played=moves_played,
+                max_moves=MAX_MOVES,
+                no_available_move=no_available_move,
+            )
+
+            log_ui_game_result(
+                logger=audit_logger,
+                game=game,
+                bot=bot,
+                moves_played=moves_played,
+                max_moves=MAX_MOVES,
+                seed=selected_seed,
+                finish_reason=finish_reason,
+            )
+
+            final_result_logged = True
 
         screen.fill(BACKGROUND_COLOR)
 
