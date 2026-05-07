@@ -2,12 +2,14 @@ import pygame
 
 
 class BoardRenderer:
-    def __init__(self, x=24, y=58, cell_size=26, cols=10, rows=20):
+    def __init__(self, x=24, y=34, cell_size=26, cols=10, rows=20):
         self.x = x
         self.y = y
         self.cell_size = cell_size
         self.cols = cols
         self.rows = rows
+
+        self.panel_height = 690
 
         self.panel_color = (28, 33, 44)
         self.panel_border_color = (90, 112, 148)
@@ -17,20 +19,17 @@ class BoardRenderer:
         self.empty_cell_color = (43, 49, 63)
 
         self.tetromino_colors = {
-            1: (245, 208, 66),    # O - yellow
-            2: (110, 203, 244),   # I - cyan
-            3: (178, 119, 255),   # T - purple
-            4: (95, 220, 130),    # S - green
-            5: (245, 95, 95),     # Z - red
-            6: (95, 140, 245),    # J - blue
-            7: (245, 160, 75),    # L - orange
+            1: (245, 208, 66),
+            2: (110, 203, 244),
+            3: (178, 119, 255),
+            4: (95, 220, 130),
+            5: (245, 95, 95),
+            6: (95, 140, 245),
+            7: (245, 160, 75),
         }
 
         self.title_color = (248, 250, 252)
-        self.subtitle_color = (180, 188, 201)
-
-        self.font_title = pygame.font.SysFont("arial", 22, bold=True)
-        self.font_subtitle = pygame.font.SysFont("arial", 14)
+        self.font_title = pygame.font.SysFont("arial", 24, bold=True)
 
     def get_cell_color(self, value):
         if not value:
@@ -43,7 +42,7 @@ class BoardRenderer:
         grid_height = self.rows * self.cell_size
 
         panel_width = grid_width + 32
-        panel_height = grid_height + 112
+        panel_height = self.panel_height
 
         panel_rect = pygame.Rect(self.x, self.y, panel_width, panel_height)
 
@@ -51,20 +50,11 @@ class BoardRenderer:
         pygame.draw.rect(surface, self.panel_border_color, panel_rect, 2, border_radius=18)
 
         title_x = self.x + 14
-        title_y = self.y + 18
+        title_y = self.y + 20
 
         surface.blit(
             self.font_title.render("Board", True, self.title_color),
             (title_x, title_y),
-        )
-
-        surface.blit(
-            self.font_subtitle.render(
-                "Backend state from game.get_board()",
-                True,
-                self.subtitle_color,
-            ),
-            (title_x, title_y + 34),
         )
 
         grid_x = self.x + 14

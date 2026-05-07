@@ -22,6 +22,7 @@ class InfoPanel:
         self.background_color = (28, 33, 44)
         self.card_color = (39, 45, 58)
         self.card_border_color = (90, 112, 148)
+        self.best_border_color = (104, 232, 153)
 
         self.button_color = (54, 65, 86)
         self.button_hover_color = (67, 81, 108)
@@ -38,8 +39,16 @@ class InfoPanel:
         self.warning_color = (255, 205, 88)
 
         self.board_empty_color = (43, 49, 63)
-        self.board_filled_color = (110, 203, 244)
         self.board_grid_color = (76, 91, 116)
+        self.tetromino_colors = {
+            1: (245, 208, 66),
+            2: (110, 203, 244),
+            3: (178, 119, 255),
+            4: (95, 220, 130),
+            5: (245, 95, 95),
+            6: (95, 140, 245),
+            7: (245, 160, 75),
+        }
 
         self.font_title = pygame.font.SysFont("arial", 31, bold=True)
         self.font_subtitle = pygame.font.SysFont("arial", 15)
@@ -48,7 +57,6 @@ class InfoPanel:
         self.font_small = pygame.font.SysFont("arial", 14, bold=True)
         self.font_tiny = pygame.font.SysFont("arial", 12)
         self.font_button = pygame.font.SysFont("arial", 14, bold=True)
-        self.font_logo_fallback = pygame.font.SysFont("arial", 18, bold=True)
 
         self.logo_surface = self.load_logo()
 
@@ -64,9 +72,22 @@ class InfoPanel:
 
         return recolored
 
+    def scale_logo_to_fit(self, logo, max_width, max_height):
+        width, height = logo.get_size()
+
+        if width == 0 or height == 0:
+            return logo
+
+        scale = min(max_width / width, max_height / height)
+        new_width = max(1, int(width * scale))
+        new_height = max(1, int(height * scale))
+
+        return pygame.transform.smoothscale(logo, (new_width, new_height))
+
     def load_logo(self):
         possible_paths = [
             Path("assets/UWB_logo.png"),
+            Path("assets/uwb_logo.png"),
             Path("assets/UWB_logo.svg"),
         ]
 
@@ -76,9 +97,8 @@ class InfoPanel:
 
             try:
                 logo = pygame.image.load(str(path)).convert_alpha()
-                logo = pygame.transform.smoothscale(logo, (112, 42))
-                logo = self.recolor_surface_to_white(logo)
-                return logo
+                logo = self.scale_logo_to_fit(logo, 150, 42)
+                return self.recolor_surface_to_white(logo)
             except pygame.error:
                 continue
 
@@ -106,6 +126,12 @@ class InfoPanel:
 
         return text + ellipsis
 
+    def get_cell_color(self, value):
+        if not value:
+            return self.board_empty_color
+
+        return self.tetromino_colors.get(value, (110, 203, 244))
+
     def draw_card(self, surface, x, y, width, height, title):
         rect = pygame.Rect(x, y, width, height)
 
@@ -124,8 +150,8 @@ class InfoPanel:
         return x + 16, y + 48
 
     def draw_logo(self, surface):
-        logo_width = 128
-        logo_height = 52
+        logo_width = 150
+        logo_height = 50
         logo_x = self.rect.right - logo_width - 24
         logo_y = self.rect.y + 14
 
@@ -139,15 +165,14 @@ class InfoPanel:
             logo_image_y = logo_y + (logo_height - self.logo_surface.get_height()) // 2
             surface.blit(self.logo_surface, (logo_image_x, logo_image_y))
         else:
-            fallback_text = "UwB"
-            fallback_surface = self.font_logo_fallback.render(
-                fallback_text,
-                True,
+            self.draw_text(
+                surface,
+                "UwB",
+                logo_x + 54,
+                logo_y + 14,
+                self.font_header,
                 self.title_color,
             )
-            text_x = logo_x + (logo_width - fallback_surface.get_width()) // 2
-            text_y = logo_y + (logo_height - fallback_surface.get_height()) // 2
-            surface.blit(fallback_surface, (text_x, text_y))
 
     def draw_divider(self, surface, x, y, width):
         pygame.draw.line(
@@ -221,11 +246,10 @@ class InfoPanel:
         selected_speed = ui_state["selected_speed"]
 
         button_height = 32
-
         first_row_y = content_y - 8
         second_row_y = content_y + 32
 
-        play_label = "Stop" if is_playing else "Start"
+        play_label = "Pause" if is_playing else "Start"
 
         rects["toggle_play"] = self.draw_button(
             surface,
@@ -266,13 +290,15 @@ class InfoPanel:
             button_height,
         )
 
-        self.draw_text(
+        rects["next_generation"] = self.draw_button(
             surface,
-            "Press Enter or Reset to apply seed.",
+            "Next gen",
             content_x + 366,
-            first_row_y + 9,
-            self.font_tiny,
-            self.muted_color,
+            first_row_y,
+            86,
+            button_height,
+            selected=False,
+            warning=ui_state["selected_mode"] == "train",
         )
 
         self.draw_text(
@@ -346,42 +372,59 @@ class InfoPanel:
         return rects
 
     def get_status(self, game, ui_state):
-        game_over = game.is_game_over()
         selected_mode = ui_state["selected_mode"]
         is_playing = ui_state["is_playing"]
-        demo_finished = ui_state["demo_finished"]
-        no_available_move = ui_state["no_available_move"]
 
         if selected_mode == "train":
-            return "Train preview selected", self.warning_color
+            train_state = ui_state["train_state"]
 
-        if demo_finished:
-            if game_over:
+            if train_state["generation_finished"]:
+                return "Generation finished", self.good_color
+
+            if is_playing:
+                return "Training running", self.good_color
+
+            return "Training paused", self.warning_color
+
+        if ui_state["demo_finished"]:
+            if game.is_game_over():
                 return "Demo finished: game over", self.warning_color
-            if no_available_move:
+            if ui_state["no_available_move"]:
                 return "Demo finished: no move", self.warning_color
             return "Demo finished: max moves", self.warning_color
 
         if is_playing:
             return "Running", self.good_color
 
-        return "Stopped", self.warning_color
+        return "Paused", self.warning_color
 
     def draw_game_info(self, surface, game, ui_state, x, y, width, height):
         content_x, content_y = self.draw_card(surface, x, y, width, height, "Game info")
 
         status, status_color = self.get_status(game, ui_state)
 
-        rows = [
-            ("Mode", ui_state["selected_mode"]),
-            ("Weights", ui_state["weights_label"]),
-            ("Seed", game.get_seed()),
-            ("Score", game.get_score()),
-            ("Lines", game.get_lines()),
-            ("Moves", ui_state["moves_played"]),
-            ("Max moves", ui_state["max_moves"]),
-            ("Game over", game.is_game_over()),
-        ]
+        if ui_state["selected_mode"] == "train":
+            train_state = ui_state["train_state"]
+
+            rows = [
+                ("Mode", "train"),
+                ("Generation", f"{train_state['generation']} / {train_state['max_generations']}"),
+                ("Population", ui_state["train_population_size"]),
+                ("Max moves", ui_state["train_max_moves"]),
+                ("Best fitness", train_state["best_fitness"] or "running"),
+                ("Finished", sum(1 for agent in train_state["agents"] if agent["finished"])),
+            ]
+        else:
+            rows = [
+                ("Mode", ui_state["selected_mode"]),
+                ("Weights", ui_state["weights_label"]),
+                ("Seed", game.get_seed()),
+                ("Score", game.get_score()),
+                ("Lines", game.get_lines()),
+                ("Moves", ui_state["moves_played"]),
+                ("Max moves", ui_state["max_moves"]),
+                ("Game over", game.is_game_over()),
+            ]
 
         for label, value in rows:
             self.draw_text(
@@ -402,44 +445,70 @@ class InfoPanel:
             self.font_text,
             status_color,
         )
-        content_y += 28
 
+        content_y += 28
         self.draw_divider(surface, content_x, content_y, width - 32)
         content_y += 14
 
-        self.draw_text(
-            surface,
-            "Final summary",
-            content_x,
-            content_y,
-            self.font_header,
-            self.title_color,
-        )
-        content_y += 28
+        if ui_state["selected_mode"] == "train":
+            train_logs = ui_state["train_state"]["logs"][-7:]
 
-        if ui_state["demo_finished"]:
-            final_rows = [
-                ("Final score", game.get_score()),
-                ("Final lines", game.get_lines()),
-                ("Moves played", ui_state["moves_played"]),
-            ]
-        else:
-            final_rows = [
-                ("Final score", "not finished"),
-                ("Final lines", "not finished"),
-                ("Moves played", ui_state["moves_played"]),
-            ]
-
-        for label, value in final_rows:
             self.draw_text(
                 surface,
-                f"{label}: {self.format_value(value)}",
+                "Train logs",
                 content_x,
                 content_y,
-                self.font_text,
-                self.text_color,
+                self.font_header,
+                self.title_color,
             )
-            content_y += 18
+            content_y += 28
+
+            for log_line in train_logs:
+                clipped = self.clip_text_to_width(log_line, self.font_tiny, width - 32)
+
+                self.draw_text(
+                    surface,
+                    f"- {clipped}",
+                    content_x,
+                    content_y,
+                    self.font_tiny,
+                    self.text_color,
+                )
+                content_y += 16
+        else:
+            self.draw_text(
+                surface,
+                "Final summary",
+                content_x,
+                content_y,
+                self.font_header,
+                self.title_color,
+            )
+            content_y += 28
+
+            if ui_state["demo_finished"]:
+                final_rows = [
+                    ("Final score", game.get_score()),
+                    ("Final lines", game.get_lines()),
+                    ("Moves played", ui_state["moves_played"]),
+                ]
+            else:
+                final_rows = [
+                    ("Final score", "not finished"),
+                    ("Final lines", "not finished"),
+                    ("Moves played", ui_state["moves_played"]),
+                ]
+
+            for label, value in final_rows:
+                self.draw_text(
+                    surface,
+                    f"{label}: {self.format_value(value)}",
+                    content_x,
+                    content_y,
+                    self.font_text,
+                    self.text_color,
+                )
+                content_y += 18
 
     def draw_piece_info(self, surface, bot, ui_state, x, y, width, height):
         content_x, content_y = self.draw_card(
@@ -549,34 +618,11 @@ class InfoPanel:
             )
             content_y += 18
 
-            self.draw_text(
-                surface,
-                f"value = {value}",
-                content_x + 12,
-                content_y,
-                self.font_small,
-                self.text_color,
-            )
+            self.draw_text(surface, f"value = {value}", content_x + 12, content_y, self.font_small, self.text_color)
             content_y += 16
-
-            self.draw_text(
-                surface,
-                f"weight = {weight}",
-                content_x + 12,
-                content_y,
-                self.font_small,
-                self.text_color,
-            )
+            self.draw_text(surface, f"weight = {weight}", content_x + 12, content_y, self.font_small, self.text_color)
             content_y += 16
-
-            self.draw_text(
-                surface,
-                f"contribution = {contribution}",
-                content_x + 12,
-                content_y,
-                self.font_small,
-                self.text_color,
-            )
+            self.draw_text(surface, f"contribution = {contribution}", content_x + 12, content_y, self.font_small, self.text_color)
             content_y += 24
 
     def draw_recent_logs(self, surface, recent_logs, x, y, width, height):
@@ -586,14 +632,7 @@ class InfoPanel:
         bottom_limit = y + height - 14
 
         if not recent_logs:
-            self.draw_text(
-                surface,
-                "No UI logs yet.",
-                content_x,
-                content_y,
-                self.font_text,
-                self.muted_color,
-            )
+            self.draw_text(surface, "No UI logs yet.", content_x, content_y, self.font_text, self.muted_color)
             return
 
         visible_logs = recent_logs[-3:]
@@ -602,23 +641,11 @@ class InfoPanel:
             if content_y + 18 > bottom_limit:
                 break
 
-            clipped_log = self.clip_text_to_width(
-                f"- {log_line}",
-                self.font_small,
-                max_text_width,
-            )
-
-            self.draw_text(
-                surface,
-                clipped_log,
-                content_x,
-                content_y,
-                self.font_small,
-                self.text_color,
-            )
+            clipped_log = self.clip_text_to_width(f"- {log_line}", self.font_small, max_text_width)
+            self.draw_text(surface, clipped_log, content_x, content_y, self.font_small, self.text_color)
             content_y += 19
 
-    def draw_mini_board(self, surface, board, x, y, cell_size=3):
+    def draw_mini_board(self, surface, board, x, y, cell_size=4):
         rows = 20
         cols = 10
 
@@ -636,110 +663,97 @@ class InfoPanel:
                     cell_size,
                 )
 
-                color = self.board_filled_color if value else self.board_empty_color
+                color = self.get_cell_color(value)
 
                 pygame.draw.rect(surface, color, cell_rect)
                 pygame.draw.rect(surface, self.board_grid_color, cell_rect, 1)
 
-    def draw_train_preview_card(self, surface, preview, x, y, width, height):
+    def draw_train_agent_card(self, surface, agent, x, y, width, height, is_best):
         card_rect = pygame.Rect(x, y, width, height)
 
-        pygame.draw.rect(surface, (33, 39, 51), card_rect, border_radius=10)
-        pygame.draw.rect(surface, self.card_border_color, card_rect, 1, border_radius=10)
+        border_color = self.best_border_color if is_best else self.card_border_color
+        border_width = 3 if is_best else 1
 
-        board_x = x + 10
-        board_y = y + 12
+        pygame.draw.rect(surface, (33, 39, 51), card_rect, border_radius=10)
+        pygame.draw.rect(surface, border_color, card_rect, border_width, border_radius=10)
+
+        board_x = x + 8
+        board_y = y + 10
 
         self.draw_mini_board(
             surface=surface,
-            board=preview["board"],
+            board=agent["game"].get_board(),
             x=board_x,
             y=board_y,
-            cell_size=3,
+            cell_size=4,
         )
 
-        text_x = board_x + 42
-        text_y = y + 12
+        text_x = board_x + 50
+        text_y = y + 10
+
+        fitness = agent["fitness"] if agent["fitness"] is not None else "running"
+        status = agent["status"] if agent["finished"] else "running"
 
         rows = [
-            f"Genome {preview['id']}",
-            f"Seed: {preview['seed']}",
-            f"Score: {preview['score']}",
-            f"Lines: {preview['lines']}",
-            f"Fit: {preview['fitness_hint']}",
+            f"G#{agent['index']}" + (" BEST" if is_best else ""),
+            f"fitness: {fitness}",
+            f"lines: {agent['game'].get_lines()}",
+            f"moves: {agent['moves']}",
+            f"status: {status}",
         ]
 
         for index, line in enumerate(rows):
             font = self.font_small if index == 0 else self.font_tiny
-            color = self.title_color if index == 0 else self.text_color
+            color = self.good_color if is_best and index == 0 else self.text_color
 
-            clipped_line = self.clip_text_to_width(
-                line,
-                font,
-                width - 58,
-            )
+            clipped_line = self.clip_text_to_width(line, font, width - 62)
 
-            self.draw_text(
-                surface,
-                clipped_line,
-                text_x,
-                text_y,
-                font,
-                color,
-            )
+            self.draw_text(surface, clipped_line, text_x, text_y, font, color)
+            text_y += 16
 
-            text_y += 15
-
-    def draw_train_previews(self, surface, previews, preview_moves, x, y, width, height):
+    def draw_train_grid(self, surface, train_state, x, y, width, height):
         content_x, content_y = self.draw_card(
             surface,
             x,
             y,
             width,
             height,
-            "Train mode preview",
+            "Train mode - GA population",
         )
 
-        self.draw_text(
-            surface,
-            f"Random generation preview, {preview_moves} moves per genome",
-            content_x,
-            content_y,
-            self.font_tiny,
-            self.muted_color,
+        header = (
+            f"Generation {train_state['generation']} / {train_state['max_generations']} | "
+            f"Best fitness: {train_state['best_fitness'] or 'running'}"
         )
 
+        self.draw_text(surface, header, content_x, content_y, self.font_tiny, self.muted_color)
         content_y += 22
 
-        if not previews:
-            self.draw_text(
-                surface,
-                "No train preview data.",
-                content_x,
-                content_y,
-                self.font_text,
-                self.muted_color,
-            )
-            return
+        agents = train_state["agents"]
+        best_index = train_state["best_agent_index"]
 
+        columns = 4
+        rows = 3
         gap = 8
-        card_width = (width - 32 - gap) // 2
-        card_height = 92
 
-        for index, preview in enumerate(previews[:4]):
-            col = index % 2
-            row = index // 2
+        card_width = (width - 32 - gap * (columns - 1)) // columns
+        card_height = (height - 76 - gap * (rows - 1)) // rows
+
+        for index, agent in enumerate(agents[:12]):
+            col = index % columns
+            row = index // columns
 
             card_x = content_x + col * (card_width + gap)
             card_y = content_y + row * (card_height + gap)
 
-            self.draw_train_preview_card(
+            self.draw_train_agent_card(
                 surface=surface,
-                preview=preview,
+                agent=agent,
                 x=card_x,
                 y=card_y,
                 width=card_width,
                 height=card_height,
+                is_best=best_index == agent["index"],
             )
 
     def draw(self, surface, game, bot, ui_state):
@@ -751,23 +765,11 @@ class InfoPanel:
         title_x = self.rect.x + 24
         title_y = self.rect.y + 18
 
-        self.draw_text(
-            surface,
-            "TetrisGA Demo",
-            title_x,
-            title_y,
-            self.font_title,
-            self.title_color,
-        )
+        title = "TetrisGA Demo" if ui_state["selected_mode"] == "demo" else "TetrisGA Train Mode"
+        subtitle = "Autonomous Tetris bot dashboard" if ui_state["selected_mode"] == "demo" else "Genetic algorithm visual training preview"
 
-        self.draw_text(
-            surface,
-            "Autonomous Tetris bot dashboard",
-            title_x,
-            title_y + 34,
-            self.font_subtitle,
-            self.muted_color,
-        )
+        self.draw_text(surface, title, title_x, title_y, self.font_title, self.title_color)
+        self.draw_text(surface, subtitle, title_x, title_y + 34, self.font_subtitle, self.muted_color)
 
         self.draw_logo(surface)
 
@@ -797,62 +799,21 @@ class InfoPanel:
             )
         )
 
-        self.draw_game_info(
-            surface=surface,
-            game=game,
-            ui_state=ui_state,
-            x=left_x,
-            y=content_y,
-            width=column_width,
-            height=438,
-        )
+        self.draw_game_info(surface, game, ui_state, left_x, content_y, column_width, 438)
 
         if ui_state["selected_mode"] == "train":
-            self.draw_train_previews(
+            self.draw_train_grid(
                 surface=surface,
-                previews=ui_state.get("train_previews", []),
-                preview_moves=ui_state.get("train_preview_moves", 0),
+                train_state=ui_state["train_state"],
                 x=middle_x,
                 y=content_y,
                 width=column_width * 2 + column_gap,
                 height=438,
             )
         else:
-            self.draw_piece_info(
-                surface=surface,
-                bot=bot,
-                ui_state=ui_state,
-                x=middle_x,
-                y=content_y,
-                width=column_width,
-                height=180,
-            )
-
-            self.draw_features(
-                surface=surface,
-                bot=bot,
-                x=middle_x,
-                y=content_y + 196,
-                width=column_width,
-                height=242,
-            )
-
-            self.draw_reasons(
-                surface=surface,
-                bot=bot,
-                x=right_x,
-                y=content_y,
-                width=column_width,
-                height=300,
-            )
-
-            self.draw_recent_logs(
-                surface=surface,
-                recent_logs=ui_state.get("recent_logs", []),
-                x=right_x,
-                y=content_y + 316,
-                width=column_width,
-                height=122,
-            )
+            self.draw_piece_info(surface, bot, ui_state, middle_x, content_y, column_width, 180)
+            self.draw_features(surface, bot, middle_x, content_y + 196, column_width, 242)
+            self.draw_reasons(surface, bot, right_x, content_y, column_width, 300)
+            self.draw_recent_logs(surface, ui_state.get("recent_logs", []), right_x, content_y + 316, column_width, 122)
 
         return clickable_rects
