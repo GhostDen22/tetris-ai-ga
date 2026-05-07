@@ -14,24 +14,34 @@ FEATURE_NAMES = [
 
 
 class InfoPanel:
-    def __init__(self, x=365, y=50, width=735, height=640):
+    def __init__(self, x=332, y=34, width=920, height=690):
         self.rect = pygame.Rect(x, y, width, height)
 
-        self.background_color = (20, 24, 32)
-        self.card_color = (25, 30, 39)
-        self.card_border_color = (72, 84, 105)
+        self.background_color = (28, 33, 44)
+        self.card_color = (39, 45, 58)
+        self.card_border_color = (90, 112, 148)
 
-        self.title_color = (245, 247, 250)
-        self.text_color = (214, 220, 230)
-        self.muted_color = (150, 160, 175)
-        self.good_color = (100, 220, 140)
-        self.warning_color = (245, 190, 80)
+        self.button_color = (54, 65, 86)
+        self.button_hover_color = (67, 81, 108)
+        self.button_active_color = (67, 176, 235)
+        self.button_warning_color = (242, 195, 87)
 
-        self.font_title = pygame.font.SysFont("arial", 30, bold=True)
+        self.input_color = (23, 27, 36)
+        self.input_active_color = (36, 47, 65)
+
+        self.title_color = (248, 250, 252)
+        self.text_color = (236, 240, 246)
+        self.muted_color = (180, 188, 201)
+        self.good_color = (104, 232, 153)
+        self.warning_color = (255, 205, 88)
+
+        self.font_title = pygame.font.SysFont("arial", 31, bold=True)
         self.font_subtitle = pygame.font.SysFont("arial", 15)
-        self.font_header = pygame.font.SysFont("arial", 19, bold=True)
-        self.font_text = pygame.font.SysFont("arial", 16)
-        self.font_small = pygame.font.SysFont("arial", 14)
+        self.font_header = pygame.font.SysFont("arial", 20, bold=True)
+        self.font_text = pygame.font.SysFont("arial", 16, bold=True)
+        self.font_small = pygame.font.SysFont("arial", 14, bold=True)
+        self.font_tiny = pygame.font.SysFont("arial", 12)
+        self.font_button = pygame.font.SysFont("arial", 14, bold=True)
 
     def draw_text(self, surface, text, x, y, font, color):
         rendered = font.render(str(text), True, color)
@@ -45,8 +55,8 @@ class InfoPanel:
     def draw_card(self, surface, x, y, width, height, title):
         rect = pygame.Rect(x, y, width, height)
 
-        pygame.draw.rect(surface, self.card_color, rect, border_radius=12)
-        pygame.draw.rect(surface, self.card_border_color, rect, 1, border_radius=12)
+        pygame.draw.rect(surface, self.card_color, rect, border_radius=14)
+        pygame.draw.rect(surface, self.card_border_color, rect, 1, border_radius=14)
 
         self.draw_text(
             surface,
@@ -57,54 +67,242 @@ class InfoPanel:
             self.title_color,
         )
 
-        return x + 16, y + 46
+        return x + 16, y + 48
 
-    def draw_game_info(
-        self,
-        surface,
-        game,
-        mode_label,
-        moves_played,
-        max_moves,
-        demo_finished,
-        no_available_move,
-        x,
-        y,
-        width,
-        height,
-    ):
+    def draw_divider(self, surface, x, y, width):
+        pygame.draw.line(
+            surface,
+            self.card_border_color,
+            (x, y),
+            (x + width, y),
+            1,
+        )
+
+    def draw_button(self, surface, label, x, y, width, height, selected=False, warning=False):
+        rect = pygame.Rect(x, y, width, height)
+
+        mouse_position = pygame.mouse.get_pos()
+        hovered = rect.collidepoint(mouse_position)
+
+        if selected:
+            color = self.button_active_color
+        elif warning:
+            color = self.button_warning_color
+        elif hovered:
+            color = self.button_hover_color
+        else:
+            color = self.button_color
+
+        pygame.draw.rect(surface, color, rect, border_radius=9)
+
+        text_surface = self.font_button.render(label, True, self.title_color)
+        text_x = x + (width - text_surface.get_width()) // 2
+        text_y = y + (height - text_surface.get_height()) // 2
+
+        surface.blit(text_surface, (text_x, text_y))
+        return rect
+
+    def draw_seed_input(self, surface, seed_text, is_active, x, y, width, height):
+        rect = pygame.Rect(x, y, width, height)
+
+        color = self.input_active_color if is_active else self.input_color
+
+        pygame.draw.rect(surface, color, rect, border_radius=9)
+        pygame.draw.rect(surface, self.card_border_color, rect, 1, border_radius=9)
+
+        display_text = seed_text if seed_text else "42"
+        suffix = "|" if is_active else ""
+
+        self.draw_text(
+            surface,
+            f"{display_text}{suffix}",
+            x + 12,
+            y + 8,
+            self.font_text,
+            self.text_color,
+        )
+
+        return rect
+
+    def draw_controls(self, surface, ui_state, x, y, width, height):
         content_x, content_y = self.draw_card(
             surface,
             x,
             y,
             width,
             height,
-            "Game info",
+            "Controls",
         )
 
+        rects = {}
+
+        selected_mode = ui_state["selected_mode"]
+        is_playing = ui_state["is_playing"]
+        selected_speed = ui_state["selected_speed"]
+
+        button_height = 32
+
+        # Поднято чуть выше, чтобы сверху и снизу внутри Controls
+        # визуально были одинаковые нормальные отступы
+        first_row_y = content_y - 8
+        second_row_y = content_y + 32
+
+        play_label = "Stop" if is_playing else "Start"
+
+        rects["toggle_play"] = self.draw_button(
+            surface,
+            play_label,
+            content_x,
+            first_row_y,
+            82,
+            button_height,
+            selected=is_playing,
+        )
+
+        rects["reset"] = self.draw_button(
+            surface,
+            "Reset",
+            content_x + 94,
+            first_row_y,
+            82,
+            button_height,
+            warning=True,
+        )
+
+        self.draw_text(
+            surface,
+            "Seed",
+            content_x + 196,
+            first_row_y + 8,
+            self.font_small,
+            self.muted_color,
+        )
+
+        rects["seed_input"] = self.draw_seed_input(
+            surface,
+            ui_state["seed_text"],
+            ui_state["seed_input_active"],
+            content_x + 240,
+            first_row_y,
+            108,
+            button_height,
+        )
+
+        self.draw_text(
+            surface,
+            "Press Enter or Reset to apply seed.",
+            content_x + 366,
+            first_row_y + 9,
+            self.font_tiny,
+            self.muted_color,
+        )
+
+        self.draw_text(
+            surface,
+            "Mode",
+            content_x,
+            second_row_y + 8,
+            self.font_small,
+            self.muted_color,
+        )
+
+        rects["mode_demo"] = self.draw_button(
+            surface,
+            "Demo",
+            content_x + 52,
+            second_row_y,
+            72,
+            button_height,
+            selected=selected_mode == "demo",
+        )
+
+        rects["mode_train"] = self.draw_button(
+            surface,
+            "Train",
+            content_x + 136,
+            second_row_y,
+            72,
+            button_height,
+            selected=selected_mode == "train",
+        )
+
+        self.draw_text(
+            surface,
+            "Speed",
+            content_x + 238,
+            second_row_y + 8,
+            self.font_small,
+            self.muted_color,
+        )
+
+        rects["speed_slow"] = self.draw_button(
+            surface,
+            "Slow",
+            content_x + 296,
+            second_row_y,
+            64,
+            button_height,
+            selected=selected_speed == "slow",
+        )
+
+        rects["speed_normal"] = self.draw_button(
+            surface,
+            "Normal",
+            content_x + 372,
+            second_row_y,
+            82,
+            button_height,
+            selected=selected_speed == "normal",
+        )
+
+        rects["speed_fast"] = self.draw_button(
+            surface,
+            "Fast",
+            content_x + 466,
+            second_row_y,
+            64,
+            button_height,
+            selected=selected_speed == "fast",
+        )
+
+        return rects
+
+    def get_status(self, game, ui_state):
         game_over = game.is_game_over()
+        selected_mode = ui_state["selected_mode"]
+        is_playing = ui_state["is_playing"]
+        demo_finished = ui_state["demo_finished"]
+        no_available_move = ui_state["no_available_move"]
+
+        if selected_mode == "train":
+            return "Train preview selected", self.warning_color
 
         if demo_finished:
             if game_over:
-                status = "Demo finished: game over"
-            elif no_available_move:
-                status = "Demo finished: no move"
-            else:
-                status = "Demo finished: max moves"
+                return "Demo finished: game over", self.warning_color
+            if no_available_move:
+                return "Demo finished: no move", self.warning_color
+            return "Demo finished: max moves", self.warning_color
 
-            status_color = self.warning_color
-        else:
-            status = "Running"
-            status_color = self.good_color
+        if is_playing:
+            return "Running", self.good_color
+
+        return "Stopped", self.warning_color
+
+    def draw_game_info(self, surface, game, ui_state, x, y, width, height):
+        content_x, content_y = self.draw_card(surface, x, y, width, height, "Game info")
+
+        status, status_color = self.get_status(game, ui_state)
 
         rows = [
-            ("Mode", mode_label),
+            ("Mode", ui_state["selected_mode"]),
+            ("Weights", ui_state["weights_label"]),
             ("Seed", game.get_seed()),
             ("Score", game.get_score()),
             ("Lines", game.get_lines()),
-            ("Moves", moves_played),
-            ("Max moves", max_moves),
-            ("Game over", game_over),
+            ("Moves", ui_state["moves_played"]),
+            ("Max moves", ui_state["max_moves"]),
+            ("Game over", game.is_game_over()),
         ]
 
         for label, value in rows:
@@ -116,47 +314,91 @@ class InfoPanel:
                 self.font_text,
                 self.text_color,
             )
-            content_y += 23
+            content_y += 18
 
         self.draw_text(
             surface,
             f"Status: {status}",
             content_x,
-            content_y + 4,
+            content_y,
             self.font_text,
             status_color,
         )
+        content_y += 28
 
-    def draw_last_move(self, surface, bot, x, y, width, height):
+        self.draw_divider(surface, content_x, content_y, width - 32)
+        content_y += 14
+
+        self.draw_text(
+            surface,
+            "Final summary",
+            content_x,
+            content_y,
+            self.font_header,
+            self.title_color,
+        )
+        content_y += 28
+
+        if ui_state["demo_finished"]:
+            final_rows = [
+                ("Final score", game.get_score()),
+                ("Final lines", game.get_lines()),
+                ("Moves played", ui_state["moves_played"]),
+            ]
+        else:
+            final_rows = [
+                ("Final score", "not finished"),
+                ("Final lines", "not finished"),
+                ("Moves played", ui_state["moves_played"]),
+            ]
+
+        for label, value in final_rows:
+            self.draw_text(
+                surface,
+                f"{label}: {self.format_value(value)}",
+                content_x,
+                content_y,
+                self.font_text,
+                self.text_color,
+            )
+            content_y += 18
+
+    def draw_piece_info(self, surface, bot, ui_state, x, y, width, height):
         content_x, content_y = self.draw_card(
             surface,
             x,
             y,
             width,
             height,
-            "Last move",
+            "Pieces and last decision",
         )
 
         move = bot.get_last_move()
         decision_score = bot.get_last_score()
 
+        rows = [
+            ("Current piece", ui_state["current_piece"]),
+            ("Last placed", ui_state["last_placed_piece"]),
+        ]
+
         if move is None:
-            self.draw_text(
-                surface,
-                "Waiting for first bot move...",
-                content_x,
-                content_y,
-                self.font_text,
-                self.muted_color,
+            rows.extend(
+                [
+                    ("Last decision", "Waiting"),
+                    ("Rotation", "N/A"),
+                    ("X", "N/A"),
+                    ("Decision score", "N/A"),
+                ]
             )
-            return
-
-        rows = [
-            ("Piece", move.get("piece", "N/A")),
-            ("Rotation", move.get("rotation_index", "N/A")),
-            ("X", move.get("x", "N/A")),
-            ("Decision score", self.format_value(decision_score)),
-        ]
+        else:
+            rows.extend(
+                [
+                    ("Last decision", move.get("piece", "N/A")),
+                    ("Rotation", move.get("rotation_index", "N/A")),
+                    ("X", move.get("x", "N/A")),
+                    ("Decision score", self.format_value(decision_score)),
+                ]
+            )
 
         for label, value in rows:
             self.draw_text(
@@ -167,65 +409,10 @@ class InfoPanel:
                 self.font_text,
                 self.text_color,
             )
-            content_y += 24
-
-    def draw_final_summary(
-        self,
-        surface,
-        game,
-        moves_played,
-        demo_finished,
-        x,
-        y,
-        width,
-        height,
-    ):
-        content_x, content_y = self.draw_card(
-            surface,
-            x,
-            y,
-            width,
-            height,
-            "Final summary",
-        )
-
-        if not demo_finished:
-            self.draw_text(
-                surface,
-                "Demo is still running.",
-                content_x,
-                content_y,
-                self.font_text,
-                self.muted_color,
-            )
-            return
-
-        rows = [
-            ("Final score", game.get_score()),
-            ("Final lines", game.get_lines()),
-            ("Moves played", moves_played),
-        ]
-
-        for label, value in rows:
-            self.draw_text(
-                surface,
-                f"{label}: {value}",
-                content_x,
-                content_y,
-                self.font_text,
-                self.text_color,
-            )
-            content_y += 24
+            content_y += 19
 
     def draw_features(self, surface, bot, x, y, width, height):
-        content_x, content_y = self.draw_card(
-            surface,
-            x,
-            y,
-            width,
-            height,
-            "Features",
-        )
+        content_x, content_y = self.draw_card(surface, x, y, width, height, "Features")
 
         features = bot.get_features()
 
@@ -242,7 +429,6 @@ class InfoPanel:
 
         for name in FEATURE_NAMES:
             value = self.format_value(features.get(name, "N/A"))
-
             self.draw_text(
                 surface,
                 f"{name}: {value}",
@@ -251,17 +437,10 @@ class InfoPanel:
                 self.font_small,
                 self.text_color,
             )
-            content_y += 21
+            content_y += 17
 
     def draw_reasons(self, surface, bot, x, y, width, height):
-        content_x, content_y = self.draw_card(
-            surface,
-            x,
-            y,
-            width,
-            height,
-            "Top 3 reasons",
-        )
+        content_x, content_y = self.draw_card(surface, x, y, width, height, "Top 3 reasons")
 
         reasons = bot.get_last_reasons()
 
@@ -288,67 +467,68 @@ class InfoPanel:
                 content_x,
                 content_y,
                 self.font_text,
-                self.text_color,
-            )
-            content_y += 20
-
-            self.draw_text(
-                surface,
-                f"value={value}   weight={weight}",
-                content_x + 14,
-                content_y,
-                self.font_small,
-                self.muted_color,
+                self.title_color,
             )
             content_y += 18
 
             self.draw_text(
                 surface,
-                f"contribution={contribution}",
-                content_x + 14,
+                f"value = {value}",
+                content_x + 12,
                 content_y,
                 self.font_small,
-                self.muted_color,
+                self.text_color,
             )
-            content_y += 28
+            content_y += 16
 
-    def draw_footer(self, surface):
-        line_y = self.rect.bottom - 42
-        text_y = self.rect.bottom - 28
+            self.draw_text(
+                surface,
+                f"weight = {weight}",
+                content_x + 12,
+                content_y,
+                self.font_small,
+                self.text_color,
+            )
+            content_y += 16
 
-        pygame.draw.line(
-            surface,
-            self.card_border_color,
-            (self.rect.x + 24, line_y),
-            (self.rect.right - 24, line_y),
-            1,
-        )
+            self.draw_text(
+                surface,
+                f"contribution = {contribution}",
+                content_x + 12,
+                content_y,
+                self.font_small,
+                self.text_color,
+            )
+            content_y += 24
 
-        self.draw_text(
-            surface,
-            "UI displays backend data only. No AI, GA or Tetris logic is implemented here.",
-            self.rect.x + 28,
-            text_y,
-            self.font_small,
-            self.muted_color,
-        )
+    def draw_train_placeholder(self, surface, x, y, width, height):
+        content_x, content_y = self.draw_card(surface, x, y, width, height, "Train mode")
 
-    def draw(
-        self,
-        surface,
-        game,
-        bot,
-        mode_label,
-        moves_played,
-        max_moves,
-        demo_finished=False,
-        no_available_move=False,
-    ):
-        pygame.draw.rect(surface, self.background_color, self.rect, border_radius=16)
-        pygame.draw.rect(surface, self.card_border_color, self.rect, 2, border_radius=16)
+        lines = [
+            "Train mode selected.",
+            "Multi-genome preview will be added",
+            "in a separate commit.",
+        ]
 
-        title_x = self.rect.x + 28
-        title_y = self.rect.y + 22
+        for line in lines:
+            self.draw_text(
+                surface,
+                line,
+                content_x,
+                content_y,
+                self.font_text,
+                self.text_color,
+            )
+            content_y += 22
+
+    def draw(self, surface, game, bot, ui_state):
+        clickable_rects = {}
+
+        pygame.draw.rect(surface, self.background_color, self.rect, border_radius=18)
+        pygame.draw.rect(surface, self.card_border_color, self.rect, 2, border_radius=18)
+
+        title_x = self.rect.x + 24
+        title_y = self.rect.y + 18
 
         self.draw_text(
             surface,
@@ -358,7 +538,6 @@ class InfoPanel:
             self.font_title,
             self.title_color,
         )
-
         self.draw_text(
             surface,
             "Autonomous Tetris bot dashboard",
@@ -368,63 +547,77 @@ class InfoPanel:
             self.muted_color,
         )
 
-        left_x = self.rect.x + 24
-        right_x = self.rect.x + 388
-        top_y = self.rect.y + 92
+        panel_padding = 20
+        column_gap = 14
+        row_gap = 20
 
-        left_width = 340
-        right_width = 323
+        controls_y = self.rect.y + 76
+        controls_height = 120
+        content_y = controls_y + controls_height + row_gap
+
+        available_width = self.rect.width - panel_padding * 2 - column_gap * 2
+        column_width = available_width // 3
+
+        left_x = self.rect.x + panel_padding
+        middle_x = left_x + column_width + column_gap
+        right_x = middle_x + column_width + column_gap
+
+        clickable_rects.update(
+            self.draw_controls(
+                surface=surface,
+                ui_state=ui_state,
+                x=left_x,
+                y=controls_y,
+                width=self.rect.width - panel_padding * 2,
+                height=controls_height,
+            )
+        )
 
         self.draw_game_info(
             surface=surface,
             game=game,
-            mode_label=mode_label,
-            moves_played=moves_played,
-            max_moves=max_moves,
-            demo_finished=demo_finished,
-            no_available_move=no_available_move,
+            ui_state=ui_state,
             x=left_x,
-            y=top_y,
-            width=left_width,
-            height=238,
+            y=content_y,
+            width=column_width,
+            height=438,
         )
 
-        self.draw_last_move(
+        self.draw_piece_info(
             surface=surface,
             bot=bot,
-            x=left_x,
-            y=top_y + 252,
-            width=left_width,
-            height=150,
+            ui_state=ui_state,
+            x=middle_x,
+            y=content_y,
+            width=column_width,
+            height=180,
         )
 
-        self.draw_final_summary(
-            surface=surface,
-            game=game,
-            moves_played=moves_played,
-            demo_finished=demo_finished,
-            x=left_x,
-            y=top_y + 416,
-            width=left_width,
-            height=92,
-        )
-
-        self.draw_features(
-            surface=surface,
-            bot=bot,
-            x=right_x,
-            y=top_y,
-            width=right_width,
-            height=238,
-        )
+        if ui_state["selected_mode"] == "train":
+            self.draw_train_placeholder(
+                surface=surface,
+                x=middle_x,
+                y=content_y + 198,
+                width=column_width,
+                height=240,
+            )
+        else:
+            self.draw_features(
+                surface=surface,
+                bot=bot,
+                x=middle_x,
+                y=content_y + 198,
+                width=column_width,
+                height=240,
+            )
 
         self.draw_reasons(
             surface=surface,
             bot=bot,
             x=right_x,
-            y=top_y + 252,
-            width=right_width,
-            height=256,
+            y=content_y,
+            width=column_width,
+            height=438,
         )
 
-        self.draw_footer(surface)
+        return clickable_rects
