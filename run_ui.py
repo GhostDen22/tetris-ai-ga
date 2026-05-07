@@ -1,8 +1,11 @@
+import random
+
 import pygame
 
 from ai.bot import Bot
 from audit.logger import AuditLogger
 from core.game import Game
+from ga.genome import Genome
 from ga.storage import load_genome
 from ui.panels import InfoPanel
 from ui.renderer import BoardRenderer
@@ -15,6 +18,9 @@ FPS = 60
 DEFAULT_SEED = 42
 MAX_MOVES = 500
 MAX_RECENT_LOGS = 6
+
+TRAIN_PREVIEW_COUNT = 6
+TRAIN_PREVIEW_MOVES = 10
 
 BACKGROUND_COLOR = (14, 17, 23)
 
@@ -133,6 +139,74 @@ def get_finish_reason(game, moves_played, max_moves, no_available_move):
     return "running"
 
 
+def run_preview_game(seed, weights, max_preview_moves):
+    preview_game = Game(seed=seed)
+    preview_bot = Bot(weights=weights)
+
+    moves = 0
+    stopped_reason = "max_preview_moves"
+
+    while moves < max_preview_moves and not preview_game.is_game_over():
+        move = preview_bot.find_best_move(
+            preview_game.board,
+            preview_game.get_current_piece(),
+        )
+
+        if move is None:
+            stopped_reason = "no_move"
+            break
+
+        preview_game.apply_bot_move(move)
+        moves += 1
+
+    if preview_game.is_game_over():
+        stopped_reason = "game_over"
+
+    return {
+        "board": preview_game.get_board(),
+        "score": preview_game.get_score(),
+        "lines": preview_game.get_lines(),
+        "moves": moves,
+        "stopped_reason": stopped_reason,
+    }
+
+
+def create_train_previews(seed):
+    rng = random.Random(seed + 2026)
+    previews = []
+
+    for index in range(TRAIN_PREVIEW_COUNT):
+        genome = Genome.random_genome(rng)
+        weights = genome.get_weights()
+        preview_seed = seed + index
+
+        preview_result = run_preview_game(
+            seed=preview_seed,
+            weights=weights,
+            max_preview_moves=TRAIN_PREVIEW_MOVES,
+        )
+
+        preview_score = preview_result["score"]
+        preview_lines = preview_result["lines"]
+        preview_moves = preview_result["moves"]
+        preview_fitness_hint = preview_score + preview_lines * 50 + preview_moves * 2
+
+        previews.append(
+            {
+                "id": index + 1,
+                "seed": preview_seed,
+                "board": preview_result["board"],
+                "score": preview_score,
+                "lines": preview_lines,
+                "moves": preview_moves,
+                "fitness_hint": preview_fitness_hint,
+                "stopped_reason": preview_result["stopped_reason"],
+            }
+        )
+
+    return previews
+
+
 def main():
     pygame.init()
 
@@ -156,6 +230,7 @@ def main():
     is_playing = True
 
     game, bot = create_game_and_bot(selected_seed, weights)
+    train_previews = create_train_previews(selected_seed)
 
     board_renderer = BoardRenderer(x=24, y=58, cell_size=26)
     info_panel = InfoPanel(x=332, y=34, width=920, height=690)
@@ -168,6 +243,7 @@ def main():
     recent_logs = []
     add_recent_log(recent_logs, f"UI started: seed={selected_seed}, mode={selected_mode}")
     add_recent_log(recent_logs, f"Weights: {weights_label}")
+    add_recent_log(recent_logs, f"Train preview ready: {TRAIN_PREVIEW_COUNT} genomes")
 
     last_bot_step_time = pygame.time.get_ticks()
     clickable_rects = {}
@@ -181,6 +257,16 @@ def main():
             "speed": selected_speed,
             "weights": weights_label,
             "max_moves": MAX_MOVES,
+        },
+    )
+
+    log_ui_event(
+        audit_logger,
+        "train_preview_created",
+        {
+            "seed": selected_seed,
+            "genomes": TRAIN_PREVIEW_COUNT,
+            "preview_moves": TRAIN_PREVIEW_MOVES,
         },
     )
 
@@ -259,6 +345,7 @@ def main():
                 ):
                     selected_seed = parse_seed(seed_text)
                     game, bot = create_game_and_bot(selected_seed, weights)
+                    train_previews = create_train_previews(selected_seed)
 
                     moves_played = 0
                     no_available_move = False
@@ -280,9 +367,23 @@ def main():
                         },
                     )
 
+                    log_ui_event(
+                        audit_logger,
+                        "train_preview_created",
+                        {
+                            "seed": selected_seed,
+                            "genomes": TRAIN_PREVIEW_COUNT,
+                            "preview_moves": TRAIN_PREVIEW_MOVES,
+                        },
+                    )
+
                     add_recent_log(
                         recent_logs,
                         f"Reset demo: seed={selected_seed}",
+                    )
+                    add_recent_log(
+                        recent_logs,
+                        "Train preview refreshed",
                     )
 
                 elif (
@@ -381,6 +482,7 @@ def main():
                 elif event.key == pygame.K_RETURN:
                     selected_seed = parse_seed(seed_text)
                     game, bot = create_game_and_bot(selected_seed, weights)
+                    train_previews = create_train_previews(selected_seed)
 
                     moves_played = 0
                     no_available_move = False
@@ -403,9 +505,23 @@ def main():
                         },
                     )
 
+                    log_ui_event(
+                        audit_logger,
+                        "train_preview_created",
+                        {
+                            "seed": selected_seed,
+                            "genomes": TRAIN_PREVIEW_COUNT,
+                            "preview_moves": TRAIN_PREVIEW_MOVES,
+                        },
+                    )
+
                     add_recent_log(
                         recent_logs,
                         f"Seed applied: {selected_seed}",
+                    )
+                    add_recent_log(
+                        recent_logs,
+                        "Train preview refreshed",
                     )
 
                 elif event.unicode.isdigit() and len(seed_text) < 9:
@@ -537,6 +653,8 @@ def main():
             "current_piece": get_current_piece_name(game),
             "last_placed_piece": last_placed_piece,
             "recent_logs": recent_logs,
+            "train_previews": train_previews,
+            "train_preview_moves": TRAIN_PREVIEW_MOVES,
         }
 
         clickable_rects = info_panel.draw(

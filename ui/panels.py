@@ -35,6 +35,10 @@ class InfoPanel:
         self.good_color = (104, 232, 153)
         self.warning_color = (255, 205, 88)
 
+        self.board_empty_color = (43, 49, 63)
+        self.board_filled_color = (110, 203, 244)
+        self.board_grid_color = (76, 91, 116)
+
         self.font_title = pygame.font.SysFont("arial", 31, bold=True)
         self.font_subtitle = pygame.font.SysFont("arial", 15)
         self.font_header = pygame.font.SysFont("arial", 20, bold=True)
@@ -551,25 +555,129 @@ class InfoPanel:
             )
             content_y += 19
 
-    def draw_train_placeholder(self, surface, x, y, width, height):
-        content_x, content_y = self.draw_card(surface, x, y, width, height, "Train mode")
+    def draw_mini_board(self, surface, board, x, y, cell_size=3):
+        rows = 20
+        cols = 10
 
-        lines = [
-            "Train mode selected.",
-            "Multi-genome preview will be added",
-            "in a separate commit.",
+        for row in range(rows):
+            for col in range(cols):
+                value = 0
+
+                if row < len(board) and col < len(board[row]):
+                    value = board[row][col]
+
+                cell_rect = pygame.Rect(
+                    x + col * cell_size,
+                    y + row * cell_size,
+                    cell_size,
+                    cell_size,
+                )
+
+                color = self.board_filled_color if value else self.board_empty_color
+
+                pygame.draw.rect(surface, color, cell_rect)
+                pygame.draw.rect(surface, self.board_grid_color, cell_rect, 1)
+
+    def draw_train_preview_card(self, surface, preview, x, y, width, height):
+        card_rect = pygame.Rect(x, y, width, height)
+
+        pygame.draw.rect(surface, (33, 39, 51), card_rect, border_radius=10)
+        pygame.draw.rect(surface, self.card_border_color, card_rect, 1, border_radius=10)
+
+        board_x = x + 10
+        board_y = y + 12
+
+        self.draw_mini_board(
+            surface=surface,
+            board=preview["board"],
+            x=board_x,
+            y=board_y,
+            cell_size=3,
+        )
+
+        text_x = board_x + 42
+        text_y = y + 12
+
+        rows = [
+            f"Genome {preview['id']}",
+            f"Seed: {preview['seed']}",
+            f"Score: {preview['score']}",
+            f"Lines: {preview['lines']}",
+            f"Fit: {preview['fitness_hint']}",
         ]
 
-        for line in lines:
+        for index, line in enumerate(rows):
+            font = self.font_small if index == 0 else self.font_tiny
+            color = self.title_color if index == 0 else self.text_color
+
+            clipped_line = self.clip_text_to_width(
+                line,
+                font,
+                width - 58,
+            )
+
             self.draw_text(
                 surface,
-                line,
+                clipped_line,
+                text_x,
+                text_y,
+                font,
+                color,
+            )
+
+            text_y += 15
+
+    def draw_train_previews(self, surface, previews, preview_moves, x, y, width, height):
+        content_x, content_y = self.draw_card(
+            surface,
+            x,
+            y,
+            width,
+            height,
+            "Train mode preview",
+        )
+
+        self.draw_text(
+            surface,
+            f"Random generation preview, {preview_moves} moves per genome",
+            content_x,
+            content_y,
+            self.font_tiny,
+            self.muted_color,
+        )
+
+        content_y += 22
+
+        if not previews:
+            self.draw_text(
+                surface,
+                "No train preview data.",
                 content_x,
                 content_y,
                 self.font_text,
-                self.text_color,
+                self.muted_color,
             )
-            content_y += 22
+            return
+
+        gap = 8
+        card_width = (width - 32 - gap) // 2
+        card_height = 92
+
+        for index, preview in enumerate(previews[:4]):
+            col = index % 2
+            row = index // 2
+
+            card_x = content_x + col * (card_width + gap)
+            card_y = content_y + row * (card_height + gap)
+
+            self.draw_train_preview_card(
+                surface=surface,
+                preview=preview,
+                x=card_x,
+                y=card_y,
+                width=card_width,
+                height=card_height,
+            )
 
     def draw(self, surface, game, bot, ui_state):
         clickable_rects = {}
@@ -633,25 +741,27 @@ class InfoPanel:
             height=438,
         )
 
-        self.draw_piece_info(
-            surface=surface,
-            bot=bot,
-            ui_state=ui_state,
-            x=middle_x,
-            y=content_y,
-            width=column_width,
-            height=180,
-        )
-
         if ui_state["selected_mode"] == "train":
-            self.draw_train_placeholder(
+            self.draw_train_previews(
                 surface=surface,
+                previews=ui_state.get("train_previews", []),
+                preview_moves=ui_state.get("train_preview_moves", 0),
                 x=middle_x,
-                y=content_y + 198,
-                width=column_width,
-                height=240,
+                y=content_y,
+                width=column_width * 2 + column_gap,
+                height=438,
             )
         else:
+            self.draw_piece_info(
+                surface=surface,
+                bot=bot,
+                ui_state=ui_state,
+                x=middle_x,
+                y=content_y,
+                width=column_width,
+                height=180,
+            )
+
             self.draw_features(
                 surface=surface,
                 bot=bot,
@@ -661,22 +771,22 @@ class InfoPanel:
                 height=240,
             )
 
-        self.draw_reasons(
-            surface=surface,
-            bot=bot,
-            x=right_x,
-            y=content_y,
-            width=column_width,
-            height=296,
-        )
+            self.draw_reasons(
+                surface=surface,
+                bot=bot,
+                x=right_x,
+                y=content_y,
+                width=column_width,
+                height=296,
+            )
 
-        self.draw_recent_logs(
-            surface=surface,
-            recent_logs=ui_state.get("recent_logs", []),
-            x=right_x,
-            y=content_y + 316,
-            width=column_width,
-            height=122,
-        )
+            self.draw_recent_logs(
+                surface=surface,
+                recent_logs=ui_state.get("recent_logs", []),
+                x=right_x,
+                y=content_y + 316,
+                width=column_width,
+                height=122,
+            )
 
         return clickable_rects
