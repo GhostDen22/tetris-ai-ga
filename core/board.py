@@ -41,16 +41,17 @@ class Board:
         return y
 
     def place_piece(self, piece, piece_x, piece_y):
+        cell_value = piece.get_cell_value()
+
         for block_x, block_y in piece.get_blocks():
             x = piece_x + block_x
             y = piece_y + block_y
 
             if 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT:
-                self.grid[y][x] = 1
+                self.grid[y][x] = cell_value
 
     def simulate_place(self, piece, piece_x, start_y=0):
         simulated_board = self.copy()
-
         drop_y = simulated_board.get_drop_y(piece, piece_x, start_y)
 
         if drop_y is None:
@@ -75,16 +76,18 @@ class Board:
             new_grid.insert(0, [0 for _ in range(self.WIDTH)])
 
         self.grid = new_grid
+
         return cleared
 
     def get_grid_with_piece(self, piece, piece_x, piece_y):
         visible_grid = [row[:] for row in self.grid]
+        cell_value = piece.get_cell_value()
 
         for block_x, block_y in piece.get_blocks():
             x = piece_x + block_x
             y = piece_y + block_y
 
             if 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT:
-                visible_grid[y][x] = 1
+                visible_grid[y][x] = cell_value
 
         return visible_grid
