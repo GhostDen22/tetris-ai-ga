@@ -52,6 +52,19 @@ class InfoPanel:
             return f"{value:.2f}"
         return value
 
+    def clip_text_to_width(self, text, font, max_width):
+        text = str(text)
+
+        if font.size(text)[0] <= max_width:
+            return text
+
+        ellipsis = "..."
+
+        while text and font.size(text + ellipsis)[0] > max_width:
+            text = text[:-1]
+
+        return text + ellipsis
+
     def draw_card(self, surface, x, y, width, height, title):
         rect = pygame.Rect(x, y, width, height)
 
@@ -142,8 +155,6 @@ class InfoPanel:
 
         button_height = 32
 
-        # Поднято чуть выше, чтобы сверху и снизу внутри Controls
-        # визуально были одинаковые нормальные отступы
         first_row_y = content_y - 8
         second_row_y = content_y + 32
 
@@ -501,6 +512,45 @@ class InfoPanel:
             )
             content_y += 24
 
+    def draw_recent_logs(self, surface, recent_logs, x, y, width, height):
+        content_x, content_y = self.draw_card(surface, x, y, width, height, "Recent logs")
+
+        max_text_width = width - 34
+        bottom_limit = y + height - 14
+
+        if not recent_logs:
+            self.draw_text(
+                surface,
+                "No UI logs yet.",
+                content_x,
+                content_y,
+                self.font_text,
+                self.muted_color,
+            )
+            return
+
+        visible_logs = recent_logs[-3:]
+
+        for log_line in visible_logs:
+            if content_y + 18 > bottom_limit:
+                break
+
+            clipped_log = self.clip_text_to_width(
+                f"- {log_line}",
+                self.font_small,
+                max_text_width,
+            )
+
+            self.draw_text(
+                surface,
+                clipped_log,
+                content_x,
+                content_y,
+                self.font_small,
+                self.text_color,
+            )
+            content_y += 19
+
     def draw_train_placeholder(self, surface, x, y, width, height):
         content_x, content_y = self.draw_card(surface, x, y, width, height, "Train mode")
 
@@ -617,7 +667,16 @@ class InfoPanel:
             x=right_x,
             y=content_y,
             width=column_width,
-            height=438,
+            height=296,
+        )
+
+        self.draw_recent_logs(
+            surface=surface,
+            recent_logs=ui_state.get("recent_logs", []),
+            x=right_x,
+            y=content_y + 316,
+            width=column_width,
+            height=122,
         )
 
         return clickable_rects

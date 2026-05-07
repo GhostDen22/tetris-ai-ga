@@ -14,6 +14,7 @@ FPS = 60
 
 DEFAULT_SEED = 42
 MAX_MOVES = 500
+MAX_RECENT_LOGS = 6
 
 BACKGROUND_COLOR = (14, 17, 23)
 
@@ -52,6 +53,20 @@ def get_current_piece_name(game):
         return "N/A"
 
     return getattr(current_piece, "name", str(current_piece))
+
+
+def format_score(value):
+    if isinstance(value, float):
+        return f"{value:.2f}"
+
+    return str(value)
+
+
+def add_recent_log(recent_logs, message):
+    recent_logs.append(message)
+
+    while len(recent_logs) > MAX_RECENT_LOGS:
+        recent_logs.pop(0)
 
 
 def log_ui_event(logger, event_name, data=None):
@@ -150,6 +165,10 @@ def main():
     last_placed_piece = "N/A"
     final_result_logged = False
 
+    recent_logs = []
+    add_recent_log(recent_logs, f"UI started: seed={selected_seed}, mode={selected_mode}")
+    add_recent_log(recent_logs, f"Weights: {weights_label}")
+
     last_bot_step_time = pygame.time.get_ticks()
     clickable_rects = {}
 
@@ -183,6 +202,12 @@ def main():
                         "lines": game.get_lines(),
                     },
                 )
+
+                add_recent_log(
+                    recent_logs,
+                    f"Window closed after {moves_played} moves",
+                )
+
                 running = False
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -203,6 +228,8 @@ def main():
                         },
                     )
 
+                    add_recent_log(recent_logs, "Seed input focused")
+
                 elif (
                     clickable_rects.get("toggle_play")
                     and clickable_rects["toggle_play"].collidepoint(mouse_position)
@@ -220,6 +247,11 @@ def main():
                                 "lines": game.get_lines(),
                             },
                         )
+
+                        if is_playing:
+                            add_recent_log(recent_logs, "Playback started")
+                        else:
+                            add_recent_log(recent_logs, "Playback stopped")
 
                 elif (
                     clickable_rects.get("reset")
@@ -248,6 +280,11 @@ def main():
                         },
                     )
 
+                    add_recent_log(
+                        recent_logs,
+                        f"Reset demo: seed={selected_seed}",
+                    )
+
                 elif (
                     clickable_rects.get("mode_demo")
                     and clickable_rects["mode_demo"].collidepoint(mouse_position)
@@ -264,6 +301,8 @@ def main():
                         },
                     )
 
+                    add_recent_log(recent_logs, "Mode changed: demo")
+
                 elif (
                     clickable_rects.get("mode_train")
                     and clickable_rects["mode_train"].collidepoint(mouse_position)
@@ -278,6 +317,8 @@ def main():
                             "mode": selected_mode,
                         },
                     )
+
+                    add_recent_log(recent_logs, "Mode changed: train")
 
                 elif (
                     clickable_rects.get("speed_slow")
@@ -295,6 +336,8 @@ def main():
                         },
                     )
 
+                    add_recent_log(recent_logs, "Speed changed: slow")
+
                 elif (
                     clickable_rects.get("speed_normal")
                     and clickable_rects["speed_normal"].collidepoint(mouse_position)
@@ -311,6 +354,8 @@ def main():
                         },
                     )
 
+                    add_recent_log(recent_logs, "Speed changed: normal")
+
                 elif (
                     clickable_rects.get("speed_fast")
                     and clickable_rects["speed_fast"].collidepoint(mouse_position)
@@ -326,6 +371,8 @@ def main():
                             "delay_ms": bot_move_delay_ms,
                         },
                     )
+
+                    add_recent_log(recent_logs, "Speed changed: fast")
 
             if event.type == pygame.KEYDOWN and seed_input_active:
                 if event.key == pygame.K_BACKSPACE:
@@ -354,6 +401,11 @@ def main():
                             "weights": weights_label,
                             "max_moves": MAX_MOVES,
                         },
+                    )
+
+                    add_recent_log(
+                        recent_logs,
+                        f"Seed applied: {selected_seed}",
                     )
 
                 elif event.unicode.isdigit() and len(seed_text) < 9:
@@ -393,11 +445,19 @@ def main():
                         "lines": game.get_lines(),
                     },
                 )
+
+                add_recent_log(
+                    recent_logs,
+                    f"No available move after {moves_played} moves",
+                )
             else:
+                last_move = bot.get_last_move()
+                decision_score = bot.get_last_score()
+
                 log_ui_decision(
                     logger=audit_logger,
                     bot=bot,
-                    move=bot.get_last_move(),
+                    move=last_move,
                     moves_played=moves_played + 1,
                     seed=selected_seed,
                     speed=selected_speed,
@@ -407,6 +467,19 @@ def main():
                 last_placed_piece = current_piece_name
                 game.apply_bot_move(move)
                 moves_played += 1
+
+                move_piece = last_move.get("piece", "N/A")
+                move_rotation = last_move.get("rotation_index", "N/A")
+                move_x = last_move.get("x", "N/A")
+
+                add_recent_log(
+                    recent_logs,
+                    (
+                        f"Move {moves_played}: "
+                        f"{move_piece} rot={move_rotation} "
+                        f"x={move_x} score={format_score(decision_score)}"
+                    ),
+                )
 
             last_bot_step_time = current_time
 
@@ -434,6 +507,14 @@ def main():
                 finish_reason=finish_reason,
             )
 
+            add_recent_log(
+                recent_logs,
+                (
+                    f"Demo finished: {finish_reason}, "
+                    f"score={game.get_score()}, lines={game.get_lines()}"
+                ),
+            )
+
             final_result_logged = True
 
         screen.fill(BACKGROUND_COLOR)
@@ -455,6 +536,7 @@ def main():
             "no_available_move": no_available_move,
             "current_piece": get_current_piece_name(game),
             "last_placed_piece": last_placed_piece,
+            "recent_logs": recent_logs,
         }
 
         clickable_rects = info_panel.draw(
