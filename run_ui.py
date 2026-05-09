@@ -46,11 +46,14 @@ def load_bot_weights():
         return Bot.DEFAULT_WEIGHTS, "default weights"
 
 
-def parse_seed(seed_text):
+def validate_seed_text(seed_text):
+    if seed_text == "":
+        return None, "Seed field cannot be empty"
+
     try:
-        return int(seed_text)
+        return int(seed_text), None
     except ValueError:
-        return DEFAULT_SEED
+        return None, "Seed must be a number"
 
 
 def create_game_and_bot(seed, weights):
@@ -198,6 +201,7 @@ def create_initial_train_state():
         "population": population,
         "agents": agents,
         "generation": 1,
+        "game_seed": TRAIN_UI_GAME_SEED,
         "max_generations": TRAIN_UI_GENERATIONS,
         "generation_finished": False,
         "best_agent_index": None,
@@ -226,7 +230,7 @@ def get_best_train_agent(train_state):
     return max(finished_agents, key=lambda agent: agent["fitness"])
 
 
-def evaluate_train_generation(train_state, recent_logs, audit_logger):
+def evaluate_train_generation(train_state, train_logs, audit_logger):
     if train_state["generation_finished"]:
         return
 
@@ -246,7 +250,7 @@ def evaluate_train_generation(train_state, recent_logs, audit_logger):
         )
 
         train_state["logs"].append(message)
-        add_recent_log(recent_logs, message)
+        add_recent_log(train_logs, message)
 
         audit_logger.log_generation_best(
             generation=train_state["generation"],
@@ -257,7 +261,7 @@ def evaluate_train_generation(train_state, recent_logs, audit_logger):
     train_state["generation_finished"] = True
 
 
-def update_train_agents(train_state, recent_logs, audit_logger):
+def update_train_agents(train_state, train_logs, audit_logger):
     if train_state["generation_finished"]:
         return
 
@@ -279,9 +283,9 @@ def update_train_agents(train_state, recent_logs, audit_logger):
 
         if move is None:
             finish_train_agent(agent, "no move")
-            train_state["logs"].append(
-                f"G#{agent['index']} finished: no move, fitness={agent['fitness']}"
-            )
+            message = f"G#{agent['index']} finished: no move, fitness={agent['fitness']}"
+            train_state["logs"].append(message)
+            add_recent_log(train_logs, message)
             continue
 
         game.apply_bot_move(move)
@@ -289,30 +293,30 @@ def update_train_agents(train_state, recent_logs, audit_logger):
 
         if game.is_game_over():
             finish_train_agent(agent, "game over")
-            train_state["logs"].append(
-                f"G#{agent['index']} finished: game over, fitness={agent['fitness']}"
-            )
+            message = f"G#{agent['index']} finished: game over, fitness={agent['fitness']}"
+            train_state["logs"].append(message)
+            add_recent_log(train_logs, message)
 
         elif agent["moves"] >= TRAIN_UI_MAX_MOVES:
             finish_train_agent(agent, "max moves")
-            train_state["logs"].append(
-                f"G#{agent['index']} finished: max moves, fitness={agent['fitness']}"
-            )
+            message = f"G#{agent['index']} finished: max moves, fitness={agent['fitness']}"
+            train_state["logs"].append(message)
+            add_recent_log(train_logs, message)
 
     if active_count == 0 or all(agent["finished"] for agent in train_state["agents"]):
         evaluate_train_generation(
             train_state=train_state,
-            recent_logs=recent_logs,
+            train_logs=train_logs,
             audit_logger=audit_logger,
         )
 
 
-def create_next_train_generation(train_state, recent_logs, audit_logger):
+def create_next_train_generation(train_state, train_logs, audit_logger):
     if not train_state["generation_finished"]:
         return train_state
 
     if train_state["generation"] >= train_state["max_generations"]:
-        add_recent_log(recent_logs, "Train mode reached final generation")
+        add_recent_log(train_logs, "Train mode reached final generation")
         train_state["logs"].append("Final train generation reached")
         return train_state
 
@@ -353,13 +357,14 @@ def create_next_train_generation(train_state, recent_logs, audit_logger):
         new_population.append(child)
 
     new_generation = train_state["generation"] + 1
-    game_seed = TRAIN_UI_GAME_SEED + new_generation
+    game_seed = TRAIN_UI_GAME_SEED + new_generation - 1
 
     new_state = {
         "rng": rng,
         "population": new_population,
         "agents": create_train_agents(new_population, game_seed),
         "generation": new_generation,
+        "game_seed": game_seed,
         "max_generations": train_state["max_generations"],
         "generation_finished": False,
         "best_agent_index": None,
@@ -368,7 +373,7 @@ def create_next_train_generation(train_state, recent_logs, audit_logger):
     }
 
     add_recent_log(
-        recent_logs,
+        train_logs,
         f"Generation {new_generation} created",
     )
 
@@ -397,17 +402,18 @@ def main():
 
     weights, weights_label = load_bot_weights()
 
-    selected_seed = DEFAULT_SEED
-    seed_text = str(DEFAULT_SEED)
+    demo_seed_value = DEFAULT_SEED
+    demo_seed_text = str(DEFAULT_SEED)
     seed_input_active = False
 
     selected_speed = "normal"
     move_delay_ms = SPEED_OPTIONS[selected_speed]
 
     selected_mode = "demo"
-    is_playing = True
+    demo_paused = True
+    train_paused = True
 
-    game, bot = create_game_and_bot(selected_seed, weights)
+    game, bot = create_game_and_bot(demo_seed_value, weights)
     train_state = create_initial_train_state()
 
     board_renderer = BoardRenderer(x=24, y=34, cell_size=26)
@@ -419,10 +425,11 @@ def main():
     last_placed_piece = "N/A"
     final_result_logged = False
 
-    recent_logs = []
-    add_recent_log(recent_logs, f"UI started: seed={selected_seed}, mode={selected_mode}")
-    add_recent_log(recent_logs, f"Weights: {weights_label}")
-    add_recent_log(recent_logs, "Train generation 1 ready")
+    demo_logs = []
+    train_logs = []
+    add_recent_log(demo_logs, f"UI started: seed={demo_seed_value}, mode=demo")
+    add_recent_log(demo_logs, f"Weights: {weights_label}")
+    add_recent_log(train_logs, "Train generation 1 ready")
 
     last_demo_step_time = pygame.time.get_ticks()
     last_train_step_time = pygame.time.get_ticks()
@@ -432,7 +439,7 @@ def main():
         audit_logger,
         "ui_started",
         {
-            "seed": selected_seed,
+            "seed": demo_seed_value,
             "mode": selected_mode,
             "speed": selected_speed,
             "weights": weights_label,
@@ -442,6 +449,46 @@ def main():
             "train_max_moves": TRAIN_UI_MAX_MOVES,
         },
     )
+
+    def apply_demo_seed():
+        nonlocal demo_seed_value
+        nonlocal game
+        nonlocal bot
+        nonlocal moves_played
+        nonlocal no_available_move
+        nonlocal last_placed_piece
+        nonlocal final_result_logged
+        nonlocal demo_paused
+        nonlocal last_demo_step_time
+
+        seed, error_message = validate_seed_text(demo_seed_text)
+
+        if error_message is not None:
+            add_recent_log(demo_logs, error_message)
+            return
+
+        demo_seed_value = seed
+        game, bot = create_game_and_bot(demo_seed_value, weights)
+
+        moves_played = 0
+        no_available_move = False
+        last_placed_piece = "N/A"
+        final_result_logged = False
+
+        demo_paused = True
+        last_demo_step_time = pygame.time.get_ticks()
+
+        add_recent_log(demo_logs, f"Seed applied: {demo_seed_value}")
+
+        log_ui_event(
+            audit_logger,
+            "seed_applied",
+            {
+                "seed": demo_seed_value,
+                "mode": selected_mode,
+                "speed": selected_speed,
+            },
+        )
 
     running = True
 
@@ -454,7 +501,7 @@ def main():
                     audit_logger,
                     "ui_window_closed",
                     {
-                        "seed": selected_seed,
+                        "seed": demo_seed_value,
                         "mode": selected_mode,
                         "moves_played": moves_played,
                         "score": game.get_score(),
@@ -468,17 +515,32 @@ def main():
                 seed_input_active = False
 
                 if (
+                    selected_mode == "demo"
+                    and
                     clickable_rects.get("seed_input")
                     and clickable_rects["seed_input"].collidepoint(mouse_position)
                 ):
                     seed_input_active = True
-                    add_recent_log(recent_logs, "Seed input focused")
+                    add_recent_log(demo_logs, "Seed input focused")
+
+                elif (
+                    selected_mode == "demo"
+                    and clickable_rects.get("seed_apply")
+                    and clickable_rects["seed_apply"].collidepoint(mouse_position)
+                ):
+                    apply_demo_seed()
+                    seed_input_active = False
 
                 elif (
                     clickable_rects.get("toggle_play")
                     and clickable_rects["toggle_play"].collidepoint(mouse_position)
                 ):
-                    is_playing = not is_playing
+                    if selected_mode == "demo":
+                        demo_paused = not demo_paused
+                        is_playing = not demo_paused
+                    else:
+                        train_paused = not train_paused
+                        is_playing = not train_paused
 
                     log_ui_event(
                         audit_logger,
@@ -492,8 +554,9 @@ def main():
                         },
                     )
 
+                    active_logs = demo_logs if selected_mode == "demo" else train_logs
                     add_recent_log(
-                        recent_logs,
+                        active_logs,
                         "Animation started" if is_playing else "Animation paused",
                     )
 
@@ -502,24 +565,24 @@ def main():
                     and clickable_rects["reset"].collidepoint(mouse_position)
                 ):
                     if selected_mode == "demo":
-                        selected_seed = parse_seed(seed_text)
-                        game, bot = create_game_and_bot(selected_seed, weights)
+                        game, bot = create_game_and_bot(demo_seed_value, weights)
 
                         moves_played = 0
                         no_available_move = False
                         last_placed_piece = "N/A"
                         final_result_logged = False
 
-                        is_playing = True
+                        demo_paused = True
                         last_demo_step_time = pygame.time.get_ticks()
 
-                        add_recent_log(recent_logs, f"Demo reset: seed={selected_seed}")
+                        demo_logs = []
+                        add_recent_log(demo_logs, f"Demo reset: seed={demo_seed_value}")
 
                         log_ui_event(
                             audit_logger,
                             "demo_reset",
                             {
-                                "seed": selected_seed,
+                                "seed": demo_seed_value,
                                 "speed": selected_speed,
                                 "weights": weights_label,
                                 "max_moves": MAX_MOVES,
@@ -527,10 +590,11 @@ def main():
                         )
                     else:
                         train_state = create_initial_train_state()
-                        is_playing = True
+                        train_paused = True
                         last_train_step_time = pygame.time.get_ticks()
 
-                        add_recent_log(recent_logs, "Train mode reset to generation 1")
+                        train_logs = []
+                        add_recent_log(train_logs, "Train mode reset to generation 1")
 
                         log_ui_event(
                             audit_logger,
@@ -547,10 +611,10 @@ def main():
                     and clickable_rects["mode_demo"].collidepoint(mouse_position)
                 ):
                     selected_mode = "demo"
-                    is_playing = True
+                    demo_paused = True
                     last_demo_step_time = pygame.time.get_ticks()
 
-                    add_recent_log(recent_logs, "Mode changed: demo")
+                    add_recent_log(demo_logs, "Mode changed: demo")
 
                     log_ui_event(
                         audit_logger,
@@ -565,10 +629,10 @@ def main():
                     and clickable_rects["mode_train"].collidepoint(mouse_position)
                 ):
                     selected_mode = "train"
-                    is_playing = True
+                    train_paused = True
                     last_train_step_time = pygame.time.get_ticks()
 
-                    add_recent_log(recent_logs, "Mode changed: train")
+                    add_recent_log(train_logs, "Mode changed: train")
 
                     log_ui_event(
                         audit_logger,
@@ -582,13 +646,13 @@ def main():
                     clickable_rects.get("next_generation")
                     and clickable_rects["next_generation"].collidepoint(mouse_position)
                 ):
-                    if selected_mode == "train":
+                    if selected_mode == "train" and train_state["generation_finished"]:
                         train_state = create_next_train_generation(
                             train_state=train_state,
-                            recent_logs=recent_logs,
+                            train_logs=train_logs,
                             audit_logger=audit_logger,
                         )
-                        is_playing = True
+                        train_paused = True
                         last_train_step_time = pygame.time.get_ticks()
 
                 elif (
@@ -597,7 +661,8 @@ def main():
                 ):
                     selected_speed = "slow"
                     move_delay_ms = SPEED_OPTIONS[selected_speed]
-                    add_recent_log(recent_logs, "Speed changed: slow")
+                    active_logs = demo_logs if selected_mode == "demo" else train_logs
+                    add_recent_log(active_logs, "Speed changed: slow")
 
                 elif (
                     clickable_rects.get("speed_normal")
@@ -605,7 +670,8 @@ def main():
                 ):
                     selected_speed = "normal"
                     move_delay_ms = SPEED_OPTIONS[selected_speed]
-                    add_recent_log(recent_logs, "Speed changed: normal")
+                    active_logs = demo_logs if selected_mode == "demo" else train_logs
+                    add_recent_log(active_logs, "Speed changed: normal")
 
                 elif (
                     clickable_rects.get("speed_fast")
@@ -613,39 +679,19 @@ def main():
                 ):
                     selected_speed = "fast"
                     move_delay_ms = SPEED_OPTIONS[selected_speed]
-                    add_recent_log(recent_logs, "Speed changed: fast")
+                    active_logs = demo_logs if selected_mode == "demo" else train_logs
+                    add_recent_log(active_logs, "Speed changed: fast")
 
-            if event.type == pygame.KEYDOWN and seed_input_active:
+            if event.type == pygame.KEYDOWN and seed_input_active and selected_mode == "demo":
                 if event.key == pygame.K_BACKSPACE:
-                    seed_text = seed_text[:-1]
+                    demo_seed_text = demo_seed_text[:-1]
 
                 elif event.key == pygame.K_RETURN:
-                    selected_seed = parse_seed(seed_text)
-                    game, bot = create_game_and_bot(selected_seed, weights)
-
-                    moves_played = 0
-                    no_available_move = False
-                    last_placed_piece = "N/A"
-                    final_result_logged = False
-
-                    is_playing = True
+                    apply_demo_seed()
                     seed_input_active = False
-                    last_demo_step_time = pygame.time.get_ticks()
 
-                    add_recent_log(recent_logs, f"Seed applied: {selected_seed}")
-
-                    log_ui_event(
-                        audit_logger,
-                        "seed_applied",
-                        {
-                            "seed": selected_seed,
-                            "mode": selected_mode,
-                            "speed": selected_speed,
-                        },
-                    )
-
-                elif event.unicode.isdigit() and len(seed_text) < 9:
-                    seed_text += event.unicode
+                elif event.unicode and event.unicode.isprintable() and len(demo_seed_text) < 12:
+                    demo_seed_text += event.unicode
 
         demo_finished = (
             game.is_game_over()
@@ -655,7 +701,7 @@ def main():
 
         should_run_demo_step = (
             selected_mode == "demo"
-            and is_playing
+            and not demo_paused
             and not demo_finished
             and current_time - last_demo_step_time >= move_delay_ms
         )
@@ -670,7 +716,7 @@ def main():
 
             if move is None:
                 no_available_move = True
-                add_recent_log(recent_logs, f"No available move after {moves_played} moves")
+                add_recent_log(demo_logs, f"No available move after {moves_played} moves")
             else:
                 last_move = bot.get_last_move()
                 decision_score = bot.get_last_score()
@@ -680,7 +726,7 @@ def main():
                     bot=bot,
                     move=last_move,
                     moves_played=moves_played + 1,
-                    seed=selected_seed,
+                    seed=demo_seed_value,
                     speed=selected_speed,
                     mode=selected_mode,
                 )
@@ -694,7 +740,7 @@ def main():
                 move_x = last_move.get("x", "N/A")
 
                 add_recent_log(
-                    recent_logs,
+                    demo_logs,
                     (
                         f"Move {moves_played}: "
                         f"{move_piece} rot={move_rotation} "
@@ -706,7 +752,7 @@ def main():
 
         should_run_train_step = (
             selected_mode == "train"
-            and is_playing
+            and not train_paused
             and not train_state["generation_finished"]
             and current_time - last_train_step_time >= move_delay_ms
         )
@@ -714,7 +760,7 @@ def main():
         if should_run_train_step:
             update_train_agents(
                 train_state=train_state,
-                recent_logs=recent_logs,
+                train_logs=train_logs,
                 audit_logger=audit_logger,
             )
             last_train_step_time = current_time
@@ -739,12 +785,12 @@ def main():
                 bot=bot,
                 moves_played=moves_played,
                 max_moves=MAX_MOVES,
-                seed=selected_seed,
+                seed=demo_seed_value,
                 finish_reason=finish_reason,
             )
 
             add_recent_log(
-                recent_logs,
+                demo_logs,
                 (
                     f"Demo finished: {finish_reason}, "
                     f"score={game.get_score()}, lines={game.get_lines()}"
@@ -755,12 +801,20 @@ def main():
 
         screen.fill(BACKGROUND_COLOR)
 
+        active_is_playing = (
+            (selected_mode == "demo" and not demo_paused)
+            or (selected_mode == "train" and not train_paused)
+        )
+        active_logs = demo_logs if selected_mode == "demo" else train_logs
+
         ui_state = {
             "selected_mode": selected_mode,
-            "is_playing": is_playing,
+            "is_playing": active_is_playing,
+            "demo_paused": demo_paused,
+            "train_paused": train_paused,
             "weights_label": weights_label,
-            "seed_text": seed_text,
-            "seed_input_active": seed_input_active,
+            "seed_text": demo_seed_text,
+            "seed_input_active": seed_input_active and selected_mode == "demo",
             "selected_speed": selected_speed,
             "move_delay_ms": move_delay_ms,
             "moves_played": moves_played,
@@ -769,7 +823,10 @@ def main():
             "no_available_move": no_available_move,
             "current_piece": get_current_piece_name(game),
             "last_placed_piece": last_placed_piece,
-            "recent_logs": recent_logs,
+            "recent_logs": active_logs,
+            "demo_seed": demo_seed_value,
+            "train_ga_seed": TRAIN_UI_SEED,
+            "train_game_seed": train_state["game_seed"],
             "train_state": train_state,
             "train_population_size": TRAIN_UI_POPULATION_SIZE,
             "train_max_moves": TRAIN_UI_MAX_MOVES,
