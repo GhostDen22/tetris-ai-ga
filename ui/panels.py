@@ -28,6 +28,7 @@ class InfoPanel:
         self.button_hover_color = (67, 81, 108)
         self.button_active_color = (67, 176, 235)
         self.button_warning_color = (242, 195, 87)
+        self.button_disabled_color = (74, 81, 96)
 
         self.input_color = (23, 27, 36)
         self.input_active_color = (36, 47, 65)
@@ -183,13 +184,26 @@ class InfoPanel:
             1,
         )
 
-    def draw_button(self, surface, label, x, y, width, height, selected=False, warning=False):
+    def draw_button(
+        self,
+        surface,
+        label,
+        x,
+        y,
+        width,
+        height,
+        selected=False,
+        warning=False,
+        enabled=True,
+    ):
         rect = pygame.Rect(x, y, width, height)
 
         mouse_position = pygame.mouse.get_pos()
-        hovered = rect.collidepoint(mouse_position)
+        hovered = enabled and rect.collidepoint(mouse_position)
 
-        if selected:
+        if not enabled:
+            color = self.button_disabled_color
+        elif selected:
             color = self.button_active_color
         elif warning:
             color = self.button_warning_color
@@ -200,7 +214,8 @@ class InfoPanel:
 
         pygame.draw.rect(surface, color, rect, border_radius=9)
 
-        text_surface = self.font_button.render(label, True, self.title_color)
+        text_color = self.title_color if enabled else self.muted_color
+        text_surface = self.font_button.render(label, True, text_color)
         text_x = x + (width - text_surface.get_width()) // 2
         text_y = y + (height - text_surface.get_height()) // 2
 
@@ -215,7 +230,7 @@ class InfoPanel:
         pygame.draw.rect(surface, color, rect, border_radius=9)
         pygame.draw.rect(surface, self.card_border_color, rect, 1, border_radius=9)
 
-        display_text = seed_text if seed_text else "42"
+        display_text = seed_text
         suffix = "|" if is_active else ""
 
         self.draw_text(
@@ -244,6 +259,7 @@ class InfoPanel:
         selected_mode = ui_state["selected_mode"]
         is_playing = ui_state["is_playing"]
         selected_speed = ui_state["selected_speed"]
+        train_state = ui_state["train_state"]
 
         button_height = 32
         first_row_y = content_y - 8
@@ -271,35 +287,67 @@ class InfoPanel:
             warning=True,
         )
 
-        self.draw_text(
-            surface,
-            "Seed",
-            content_x + 196,
-            first_row_y + 8,
-            self.font_small,
-            self.muted_color,
-        )
+        if selected_mode == "demo":
+            self.draw_text(
+                surface,
+                "Seed",
+                content_x + 196,
+                first_row_y + 8,
+                self.font_small,
+                self.muted_color,
+            )
 
-        rects["seed_input"] = self.draw_seed_input(
-            surface,
-            ui_state["seed_text"],
-            ui_state["seed_input_active"],
-            content_x + 240,
-            first_row_y,
-            108,
-            button_height,
-        )
+            rects["seed_input"] = self.draw_seed_input(
+                surface,
+                ui_state["seed_text"],
+                ui_state["seed_input_active"],
+                content_x + 240,
+                first_row_y,
+                108,
+                button_height,
+            )
 
-        rects["next_generation"] = self.draw_button(
-            surface,
-            "Next gen",
-            content_x + 366,
-            first_row_y,
-            86,
-            button_height,
-            selected=False,
-            warning=ui_state["selected_mode"] == "train",
-        )
+            rects["seed_apply"] = self.draw_button(
+                surface,
+                "Apply",
+                content_x + 360,
+                first_row_y,
+                68,
+                button_height,
+            )
+        else:
+            next_enabled = train_state["generation_finished"]
+            next_rect = self.draw_button(
+                surface,
+                "Next gen",
+                content_x + 196,
+                first_row_y,
+                96,
+                button_height,
+                selected=False,
+                warning=next_enabled,
+                enabled=next_enabled,
+            )
+
+            if next_enabled:
+                rects["next_generation"] = next_rect
+
+            self.draw_text(
+                surface,
+                f"GA seed: {ui_state['train_ga_seed']}",
+                content_x + 312,
+                first_row_y + 2,
+                self.font_tiny,
+                self.muted_color,
+            )
+            self.draw_text(
+                surface,
+                f"Game seed: {ui_state['train_game_seed']}",
+                content_x + 312,
+                first_row_y + 18,
+                self.font_tiny,
+                self.muted_color,
+            )
 
         self.draw_text(
             surface,
@@ -411,6 +459,8 @@ class InfoPanel:
                 ("Generation", f"{train_state['generation']} / {train_state['max_generations']}"),
                 ("Population", ui_state["train_population_size"]),
                 ("Max moves", ui_state["train_max_moves"]),
+                ("GA seed", ui_state["train_ga_seed"]),
+                ("Game seed", ui_state["train_game_seed"]),
                 ("Best fitness", train_state["best_fitness"] or "running"),
                 ("Finished", sum(1 for agent in train_state["agents"] if agent["finished"])),
             ]
@@ -799,18 +849,18 @@ class InfoPanel:
             )
         )
 
-        self.draw_game_info(surface, game, ui_state, left_x, content_y, column_width, 438)
-
         if ui_state["selected_mode"] == "train":
             self.draw_train_grid(
                 surface=surface,
                 train_state=ui_state["train_state"],
-                x=middle_x,
+                x=left_x,
                 y=content_y,
                 width=column_width * 2 + column_gap,
                 height=438,
             )
+            self.draw_game_info(surface, game, ui_state, right_x, content_y, column_width, 438)
         else:
+            self.draw_game_info(surface, game, ui_state, left_x, content_y, column_width, 438)
             self.draw_piece_info(surface, bot, ui_state, middle_x, content_y, column_width, 180)
             self.draw_features(surface, bot, middle_x, content_y + 196, column_width, 242)
             self.draw_reasons(surface, bot, right_x, content_y, column_width, 300)
