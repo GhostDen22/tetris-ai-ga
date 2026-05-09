@@ -35,6 +35,16 @@ class Piece:
         ],
     }
 
+    CELL_VALUES = {
+        "O": 1,
+        "I": 2,
+        "T": 3,
+        "S": 4,
+        "Z": 5,
+        "J": 6,
+        "L": 7,
+    }
+
     def __init__(self, name, rotation_index=0):
         if name not in self.SHAPES:
             raise ValueError(f"Unknown piece: {name}")
@@ -48,8 +58,11 @@ class Piece:
     def get_rotated(self, rotation_offset=1):
         return Piece(
             self.name,
-            self.rotation_index + rotation_offset
+            self.rotation_index + rotation_offset,
         )
 
     def get_rotation_count(self):
         return len(self.SHAPES[self.name])
+
+    def get_cell_value(self):
+        return self.CELL_VALUES[self.name]

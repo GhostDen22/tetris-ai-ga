@@ -2,117 +2,82 @@ import pygame
 
 
 class BoardRenderer:
-    def __init__(self, x=25, y=50, cell_size=28):
+    def __init__(self, x=24, y=34, cell_size=26, cols=10, rows=20):
         self.x = x
         self.y = y
         self.cell_size = cell_size
+        self.cols = cols
+        self.rows = rows
 
-        self.header_height = 70
-        self.padding = 16
+        self.panel_height = 690
 
-        self.card_color = (20, 24, 32)
-        self.card_border_color = (72, 84, 105)
+        self.panel_color = (28, 33, 44)
+        self.panel_border_color = (90, 112, 148)
 
-        self.empty_color = (25, 30, 39)
-        self.grid_color = (55, 64, 78)
-        self.board_border_color = (126, 144, 170)
+        self.grid_bg_color = (39, 45, 58)
+        self.grid_line_color = (76, 91, 116)
+        self.empty_cell_color = (43, 49, 63)
 
-        self.tetromino_colors = [
-            (58, 175, 235),
-            (118, 214, 255),
-            (90, 200, 140),
-            (245, 200, 80),
-            (245, 135, 95),
-            (180, 135, 245),
-            (235, 95, 135),
-        ]
+        self.tetromino_colors = {
+            1: (245, 208, 66),
+            2: (110, 203, 244),
+            3: (178, 119, 255),
+            4: (95, 220, 130),
+            5: (245, 95, 95),
+            6: (95, 140, 245),
+            7: (245, 160, 75),
+        }
 
+        self.title_color = (248, 250, 252)
         self.font_title = pygame.font.SysFont("arial", 24, bold=True)
-        self.font_small = pygame.font.SysFont("arial", 14)
 
-    def draw_text(self, surface, text, x, y, font, color):
-        rendered = font.render(str(text), True, color)
-        surface.blit(rendered, (x, y))
+    def get_cell_color(self, value):
+        if not value:
+            return self.empty_cell_color
 
-    def get_cell_color(self, cell):
-        if cell in (0, None, False):
-            return self.empty_color
-
-        if isinstance(cell, int):
-            return self.tetromino_colors[cell % len(self.tetromino_colors)]
-
-        return self.tetromino_colors[0]
+        return self.tetromino_colors.get(value, (110, 203, 244))
 
     def draw(self, surface, board):
-        if not board:
-            return
+        grid_width = self.cols * self.cell_size
+        grid_height = self.rows * self.cell_size
 
-        rows = len(board)
-        cols = len(board[0]) if rows > 0 else 0
+        panel_width = grid_width + 32
+        panel_height = self.panel_height
 
-        board_width = cols * self.cell_size
-        board_height = rows * self.cell_size
+        panel_rect = pygame.Rect(self.x, self.y, panel_width, panel_height)
 
-        card_width = board_width + self.padding * 2
-        card_height = board_height + self.header_height + self.padding * 2
+        pygame.draw.rect(surface, self.panel_color, panel_rect, border_radius=18)
+        pygame.draw.rect(surface, self.panel_border_color, panel_rect, 2, border_radius=18)
 
-        pygame.draw.rect(
-            surface,
-            self.card_color,
-            (self.x, self.y, card_width, card_height),
-            border_radius=16,
+        title_x = self.x + 14
+        title_y = self.y + 20
+
+        surface.blit(
+            self.font_title.render("Board", True, self.title_color),
+            (title_x, title_y),
         )
 
-        pygame.draw.rect(
-            surface,
-            self.card_border_color,
-            (self.x, self.y, card_width, card_height),
-            2,
-            border_radius=16,
-        )
+        grid_x = self.x + 14
+        grid_y = self.y + 86
 
-        self.draw_text(
-            surface,
-            "Board",
-            self.x + 16,
-            self.y + 14,
-            self.font_title,
-            (245, 247, 250),
-        )
+        grid_rect = pygame.Rect(grid_x, grid_y, grid_width, grid_height)
 
-        self.draw_text(
-            surface,
-            "Backend state from game.get_board()",
-            self.x + 16,
-            self.y + 42,
-            self.font_small,
-            (150, 160, 175),
-        )
+        pygame.draw.rect(surface, self.grid_bg_color, grid_rect)
+        pygame.draw.rect(surface, self.panel_border_color, grid_rect, 1)
 
-        board_x = self.x + self.padding
-        board_y = self.y + self.header_height
+        for row in range(self.rows):
+            for col in range(self.cols):
+                value = 0
 
-        pygame.draw.rect(
-            surface,
-            self.board_border_color,
-            (
-                board_x - 2,
-                board_y - 2,
-                board_width + 4,
-                board_height + 4,
-            ),
-            2,
-            border_radius=6,
-        )
+                if row < len(board) and col < len(board[row]):
+                    value = board[row][col]
 
-        for row_index, row in enumerate(board):
-            for col_index, cell in enumerate(row):
-                rect = pygame.Rect(
-                    board_x + col_index * self.cell_size,
-                    board_y + row_index * self.cell_size,
+                cell_rect = pygame.Rect(
+                    grid_x + col * self.cell_size,
+                    grid_y + row * self.cell_size,
                     self.cell_size,
                     self.cell_size,
                 )
 
-                pygame.draw.rect(surface, self.get_cell_color(cell), rect)
-                pygame.draw.rect(surface, self.grid_color, rect, 1)
+                pygame.draw.rect(surface, self.get_cell_color(value), cell_rect)
+                pygame.draw.rect(surface, self.grid_line_color, cell_rect, 1)
