@@ -67,6 +67,9 @@ tetris-ai-ga/
 │   ├── storage.py          # Saving and loading best genome
 │   └── trainer.py          # Genetic algorithm training loop
 │
+├── models/
+│   └── best_genome.json    # Generated locally by training, not committed
+│
 ├── simulation/
 │   └── runner.py           # Runs complete bot games
 │
