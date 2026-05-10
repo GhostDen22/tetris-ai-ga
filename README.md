@@ -9,7 +9,7 @@ The bot plays Tetris by evaluating possible moves using board features and heuri
 The project contains:
 
 - a Tetris game engine,
-- a heuristic AI bot,
+- a heuristic bot,
 - feature extraction from the board,
 - genetic algorithm training,
 - audit logging,
@@ -561,7 +561,7 @@ python run_ui.py
 
 ## Authors
 
-Project created for academic purposes as a Tetris AI / Genetic Algorithm project.
+Project created for academic purposes as a Tetris bot with a Genetic Algorithm.
 
 - Daniel Šapovalov
 - Dmytro Nesvitailo
